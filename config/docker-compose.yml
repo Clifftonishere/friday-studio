@@ -1,0 +1,16 @@
+services:
+  friday:
+    image: ghcr.io/openclaw/openclaw:latest
+    container_name: friday-animateme
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ../workspace:/home/node/.openclaw/workspace
+      - ../pipeline:/home/node/.openclaw/pipeline
+    ports:
+      - "3001:3000"
+    environment:
+      - NODE_ENV=production
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

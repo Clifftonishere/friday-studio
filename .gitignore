@@ -1,0 +1,14 @@
+config/.env
+.env
+__pycache__/
+*.pyc
+crewai-env/
+venv/
+outputs/
+*.mp4
+*.mov
+*.wav
+*.mp3
+.DS_Store
+workspace/.openclaw/
+workspace/.git/

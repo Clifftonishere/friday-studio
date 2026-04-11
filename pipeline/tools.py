@@ -5,7 +5,7 @@ Tool routing:
   - Neolemon V3: Image generation only (Pixar style). Called via Segmind API.
   - Kling AI: Video generation (animate keyframes, primary). Called via fal.ai proxy.
   - Grok Imagine: Video generation (animate keyframes, fallback). Called via xAI API.
-  - Suno V5: Audio generation. Called via Suno API.
+  - MiniMax Music: Audio generation. Called via fal.ai proxy (same FAL_KEY).
   - All agent reasoning runs on Anthropic Claude (configured in pipeline.py).
 """
 
@@ -344,25 +344,74 @@ def grok_wait_for_video(request_id, poll_interval=5, timeout=600):
 
 
 # ---------------------------------------------------------------------------
-# Suno V5 — Audio score generation
+# MiniMax Music — Audio score generation via fal.ai
 # ---------------------------------------------------------------------------
 
-def suno_generate(prompt, instrumental=True):
-    """Generate audio via Suno API."""
-    api_key = os.environ.get("SUNO_API_KEY")
-    if not api_key:
-        raise ValueError("SUNO_API_KEY not set")
+FAL_MINIMAX_MODEL = "fal-ai/minimax-music"
+
+
+def music_generate(prompt, instrumental=True):
+    """Generate audio via MiniMax Music on fal.ai.
+
+    Uses the same FAL_KEY as Kling video generation.
+
+    Args:
+        prompt: Text description of the music (genre, mood, tempo, structure)
+        instrumental: If True, generates instrumental only (no vocals)
+
+    Returns:
+        dict with request_id for polling, or completed result
+    """
+    if instrumental and "instrumental" not in prompt.lower():
+        prompt = f"[Instrumental] {prompt}"
 
     def _call():
         resp = requests.post(
-            "https://api.sunoapi.org/v1/generate",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
+            f"{FAL_QUEUE_URL}/{FAL_MINIMAX_MODEL}",
+            headers=_fal_headers(),
+            json={
+                "prompt": prompt,
             },
-            json={"prompt": prompt, "instrumental": instrumental},
         )
         resp.raise_for_status()
         return resp.json()
 
     return _retry(_call)
+
+
+def music_poll(request_id):
+    """Poll fal.ai queue for music generation status."""
+    resp = requests.get(
+        f"{FAL_QUEUE_URL}/{FAL_MINIMAX_MODEL}/requests/{request_id}/status",
+        headers=_fal_headers(),
+        params={"logs": "1"},
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
+def music_get_result(request_id):
+    """Fetch the completed audio result from fal.ai."""
+    resp = requests.get(
+        f"{FAL_QUEUE_URL}/{FAL_MINIMAX_MODEL}/requests/{request_id}",
+        headers=_fal_headers(),
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
+def music_wait_for_result(request_id, poll_interval=5, timeout=300):
+    """Wait for music generation to complete on fal.ai.
+
+    Returns:
+        dict with audio URL on success, raises on failure/timeout
+    """
+    start = time.time()
+    while time.time() - start < timeout:
+        status = music_poll(request_id)
+        if status.get("status") == "COMPLETED":
+            return music_get_result(request_id)
+        if status.get("status") == "FAILED":
+            raise RuntimeError(f"Music generation failed: {status}")
+        time.sleep(poll_interval)
+    raise TimeoutError(f"Music generation timed out after {timeout}s")

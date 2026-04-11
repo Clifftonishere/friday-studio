@@ -249,7 +249,7 @@ def _stage_4_animation(project_id: str, stage_id: str) -> list[dict]:
 
 
 def _stage_5_audio(project_id: str, stage_id: str) -> list[dict]:
-    """Audio Producer: Generate soundtrack via Suno or use uploaded audio."""
+    """Audio Producer: Generate soundtrack via MiniMax Music or use uploaded audio."""
     config = get_soundtrack_config(project_id)
 
     if config and config["mode"] == "upload" and config.get("uploaded_path"):
@@ -261,7 +261,7 @@ def _stage_5_audio(project_id: str, stage_id: str) -> list[dict]:
         return [asset]
 
     from crewai import Agent, Task, Crew, Process
-    from pipeline.tools import suno_generate
+    from pipeline.tools import music_generate, music_wait_for_result
 
     project = get_project(project_id)
     script = get_assets(project_id, stage_number=1, asset_type="script", status="approved")
@@ -270,26 +270,27 @@ def _stage_5_audio(project_id: str, stage_id: str) -> list[dict]:
     agent = Agent(
         role="Audio Producer",
         goal="Generate an instrumental score prompt matching the video emotional arc",
-        backstory="Music supervisor. Writes Suno V5 prompts with structure tags matching the video pacing.",
+        backstory="Music supervisor. Writes text prompts describing instrumental music — genre, mood, tempo, instruments, and structure.",
         llm="anthropic/claude-sonnet-4-5",
         verbose=True, allow_delegation=False,
     )
     task = Task(
         description=(
-            f"Write a Suno V5 prompt for an instrumental soundtrack for this project:\n\n"
+            f"Write a music generation prompt for an instrumental soundtrack for this project:\n\n"
             f"Brief: {project['brief']}\n"
             f"Script: {script_text[:500]}\n\n"
-            f"The prompt should include: genre, mood, tempo, structure tags with timestamps, "
-            f"and be 60-120 seconds long. Output ONLY the Suno prompt text."
+            f"The prompt should describe: genre, mood, tempo, instruments, emotional arc, "
+            f"and be suitable for a 60-second instrumental track. "
+            f"Output ONLY the music prompt text, no explanation."
         ),
-        expected_output="Suno V5 prompt string",
+        expected_output="Music generation prompt string",
         agent=agent,
     )
     crew = Crew(agents=[agent], tasks=[task], process=Process.sequential, verbose=True)
-    suno_prompt = str(crew.kickoff())
+    music_prompt = str(crew.kickoff())
 
-    suno_result = suno_generate(suno_prompt, instrumental=True)
-    # Save audio file if URL is returned
+    music_result = music_generate(music_prompt, instrumental=True)
+
     import os
     from pathlib import Path
     data_dir = os.environ.get("FRIDAY_DATA_DIR", "/data")
@@ -297,17 +298,29 @@ def _stage_5_audio(project_id: str, stage_id: str) -> list[dict]:
     audio_dir.mkdir(parents=True, exist_ok=True)
     out_path = str(audio_dir / "soundtrack_v1.mp3")
 
+    # fal.ai queue: if we got a request_id, poll for completion
+    request_id = music_result.get("request_id")
+    if request_id:
+        music_result = music_wait_for_result(request_id)
+
+    # Extract audio URL from result
     audio_url = None
-    if isinstance(suno_result, dict):
-        audio_url = suno_result.get("audio_url") or suno_result.get("url")
+    if isinstance(music_result, dict):
+        audio = music_result.get("audio") or music_result.get("audio_file") or {}
+        if isinstance(audio, dict):
+            audio_url = audio.get("url")
+        elif isinstance(audio, str):
+            audio_url = audio
+        if not audio_url:
+            audio_url = music_result.get("url")
     if audio_url:
         _download_file(audio_url, out_path)
 
     asset = create_asset(
         project_id, stage_id, "audio",
         file_path=out_path,
-        text_content=suno_prompt,
-        metadata={"source": "suno_v5"},
+        text_content=music_prompt,
+        metadata={"source": "minimax_music"},
     )
     return [asset]
 

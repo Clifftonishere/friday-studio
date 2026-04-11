@@ -10,9 +10,9 @@ User selects style
           ├── Character Design → GPT-4o (OpenAI API)
           └── Scene Generation → GPT-4o
     ↓ Converge
-    ├── Animation → Grok Imagine (image-to-video)
-    ├── Audio → Suno V5
-    └── Assembly → FFmpeg → VectCutAPI → CapCut
+    ├── Animation → Kling 2.6 Pro via fal.ai (image-to-video)
+    ├── Audio → MiniMax Music via fal.ai
+    └── Assembly → FFmpeg
 ```
 
 ## Cost Per Project
@@ -21,7 +21,7 @@ User selects style
 |------|-----------|------------|
 | Character refs | ~$0.20-0.30 | ~$0.15-0.20 |
 | Scene generation | ~$0.50-1.00 | ~$0.35-0.75 |
-| Animation | ~$1.50-2.25 | ~$1.50-2.25 |
-| Audio | ~$0.10 | ~$0.10 |
+| Animation (Kling) | ~$0.35-0.70 | ~$0.35-0.70 |
+| Audio (MiniMax) | ~$0.04 | ~$0.04 |
 | Assembly | Free | Free |
-| **Total** | **~$2.30-3.65** | **~$2.10-3.30** |
+| **Total** | **~$1.09-2.04** | **~$0.89-1.69** |

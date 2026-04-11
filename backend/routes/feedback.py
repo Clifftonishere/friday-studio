@@ -1,0 +1,99 @@
+"""Friday Studio — Asset approval/rejection routes."""
+
+import asyncio
+
+from fastapi import APIRouter, HTTPException
+
+from backend.database import (
+    get_asset, update_asset, create_feedback,
+    check_stage_all_approved, get_stage, update_stage, update_project,
+)
+from backend.models import FeedbackCreate
+from backend.worker import run_stage, event_queues
+
+router = APIRouter(tags=["feedback"])
+
+
+def _get_stage_number_for_asset(asset_id: str) -> tuple[str, int]:
+    """Return (project_id, stage_number) for an asset."""
+    from backend.database import get_db
+    conn = get_db()
+    row = conn.execute(
+        "SELECT a.project_id, s.stage_number FROM assets a JOIN stages s ON a.stage_id = s.id WHERE a.id=?",
+        (asset_id,),
+    ).fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(404, "Asset not found")
+    return row["project_id"], row["stage_number"]
+
+
+@router.post("/assets/{asset_id}/approve")
+async def api_approve_asset(asset_id: str):
+    asset = get_asset(asset_id)
+    if not asset:
+        raise HTTPException(404, "Asset not found")
+
+    update_asset(asset_id, status="approved")
+    create_feedback(asset_id, "approve")
+
+    project_id, stage_num = _get_stage_number_for_asset(asset_id)
+
+    if check_stage_all_approved(project_id, stage_num):
+        stage = get_stage(project_id, stage_num)
+        update_stage(stage["id"], status="approved")
+        update_project(project_id, current_stage=stage_num)
+
+        queue = event_queues.setdefault(project_id, asyncio.Queue())
+        await queue.put({"type": "stage_approved", "data": {"stage": stage_num}})
+
+        next_stage_num = stage_num + 1
+        if next_stage_num <= 6:
+            next_stage = get_stage(project_id, next_stage_num)
+            if next_stage and next_stage["status"] == "pending":
+                update_project(project_id, current_stage=next_stage_num)
+                asyncio.create_task(run_stage(project_id, next_stage_num, queue))
+        else:
+            update_project(project_id, status="completed")
+
+    return {"ok": True, "status": "approved"}
+
+
+@router.post("/assets/{asset_id}/reject")
+async def api_reject_asset(asset_id: str, body: FeedbackCreate):
+    asset = get_asset(asset_id)
+    if not asset:
+        raise HTTPException(404, "Asset not found")
+
+    update_asset(asset_id, status="rejected")
+    create_feedback(asset_id, "reject", body.comment)
+
+    return {"ok": True, "status": "rejected", "comment": body.comment}
+
+
+@router.post("/projects/{project_id}/stages/{stage_num}/approve-all")
+async def api_approve_all(project_id: str, stage_num: int):
+    from backend.database import get_assets as _get_assets
+    assets = _get_assets(project_id, stage_number=stage_num)
+    for asset in assets:
+        if asset["status"] == "pending_review":
+            update_asset(asset["id"], status="approved")
+            create_feedback(asset["id"], "approve")
+
+    if check_stage_all_approved(project_id, stage_num):
+        stage = get_stage(project_id, stage_num)
+        update_stage(stage["id"], status="approved")
+
+        queue = event_queues.setdefault(project_id, asyncio.Queue())
+        await queue.put({"type": "stage_approved", "data": {"stage": stage_num}})
+
+        next_stage_num = stage_num + 1
+        if next_stage_num <= 6:
+            next_stage = get_stage(project_id, next_stage_num)
+            if next_stage and next_stage["status"] == "pending":
+                update_project(project_id, current_stage=next_stage_num)
+                asyncio.create_task(run_stage(project_id, next_stage_num, queue))
+        else:
+            update_project(project_id, status="completed")
+
+    return {"ok": True}

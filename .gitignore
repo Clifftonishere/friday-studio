@@ -12,3 +12,6 @@ outputs/
 .DS_Store
 workspace/.openclaw/
 workspace/.git/
+frontend/.next/
+frontend/out/
+frontend/node_modules/

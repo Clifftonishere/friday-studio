@@ -16,10 +16,13 @@ SEGMIND_API_KEY = os.environ.get("SEGMIND_API_KEY")
 GROK_API_KEY = os.environ.get("GROK_API_KEY")
 SUNO_API_KEY = os.environ.get("SUNO_API_KEY")
 
+ORCHESTRATION_LLM = "anthropic/claude-sonnet-4-5"
+
 script_writer = Agent(
     role="Script Writer",
     goal="Expand a client brief into a detailed scene-by-scene breakdown",
     backstory="Professional animation scriptwriter. Produces structured scripts with scene numbers, durations, camera directions, emotional beats.",
+    llm=ORCHESTRATION_LLM,
     verbose=True, allow_delegation=False,
 )
 
@@ -27,6 +30,7 @@ character_designer = Agent(
     role="Character Designer",
     goal="Generate character reference images from uploaded photos",
     backstory="Animation character designer. For ANIME: writes GPT-4o prompts for cel-shaded style transfer. For PIXAR: writes Neolemon V3 prompts with reference anchoring. Always creates a MASTER CHARACTER SHEET first for consistency.",
+    llm=ORCHESTRATION_LLM,
     verbose=True, allow_delegation=False,
 )
 
@@ -34,6 +38,7 @@ scene_composer = Agent(
     role="Scene Composer",
     goal="Generate each scene as a static keyframe using approved character references",
     backstory="Animation scene composer. Every prompt references the master character sheet to maintain consistency. Specifies camera angle, lighting, positioning, and emotional tone.",
+    llm=ORCHESTRATION_LLM,
     verbose=True, allow_delegation=False,
 )
 
@@ -41,6 +46,7 @@ animator = Agent(
     role="Animator",
     goal="Convert static keyframes into animated clips via Grok Imagine",
     backstory="Animation director. Writes motion-only prompts for Grok image-to-video. Never re-describes the image — only describes what should MOVE.",
+    llm=ORCHESTRATION_LLM,
     verbose=True, allow_delegation=False,
 )
 
@@ -48,6 +54,7 @@ audio_producer = Agent(
     role="Audio Producer",
     goal="Generate an instrumental score matching the video emotional arc",
     backstory="Music supervisor. Writes Suno V5 prompts with structure tags matching the video pacing.",
+    llm=ORCHESTRATION_LLM,
     verbose=True, allow_delegation=False,
 )
 
@@ -55,6 +62,7 @@ assembly_editor = Agent(
     role="Assembly Editor",
     goal="Sequence all clips with transitions and audio into a final video",
     backstory="Post-production editor. Produces FFmpeg commands and VectCutAPI drafts for CapCut final polish.",
+    llm=ORCHESTRATION_LLM,
     verbose=True, allow_delegation=False,
 )
 

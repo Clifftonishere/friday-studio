@@ -35,8 +35,6 @@ export default function NewProjectPage() {
   };
 
   const handleMediaContinue = () => {
-    // Fetch uploads from the component state would require lifting state
-    // For now just advance — uploads are already saved server-side
     setStep(2);
   };
 
@@ -57,23 +55,23 @@ export default function NewProjectPage() {
             <div
               className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
                 i === step
-                  ? "bg-white text-black"
+                  ? "bg-[#6B5B4E] text-white"
                   : i < step
-                    ? "bg-white/20 text-white"
-                    : "bg-white/5 text-white/30"
+                    ? "bg-[#6B5B4E]/20 text-[#6B5B4E]"
+                    : "bg-[#E8E0D6] text-[#B0A396]"
               }`}
             >
               {i < step ? "\u2713" : i + 1}
             </div>
             <span
               className={`text-sm ${
-                i === step ? "text-white" : "text-white/30"
+                i === step ? "text-[#1a1a1a] font-medium" : "text-[#B0A396]"
               }`}
             >
               {s}
             </span>
             {i < STEPS.length - 1 && (
-              <div className="w-8 h-px bg-white/10 mx-1" />
+              <div className="w-8 h-px bg-[#E8E0D6] mx-1" />
             )}
           </div>
         ))}

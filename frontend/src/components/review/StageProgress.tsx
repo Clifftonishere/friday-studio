@@ -13,19 +13,19 @@ interface Props {
 }
 
 const STATUS_ICON: Record<string, string> = {
-  pending: "\u25cb",        // empty circle
-  running: "\u25d4",        // half circle (spinner)
-  awaiting_review: "\u25c9", // eye-like
-  approved: "\u2713",       // checkmark
-  failed: "\u2717",         // x mark
+  pending: "\u25cb",
+  running: "\u25d4",
+  awaiting_review: "\u25c9",
+  approved: "\u2713",
+  failed: "\u2717",
 };
 
 const STATUS_COLOR: Record<string, string> = {
-  pending: "text-white/20",
-  running: "text-blue-400",
-  awaiting_review: "text-yellow-400",
-  approved: "text-green-400",
-  failed: "text-red-400",
+  pending: "text-[#B0A396]",
+  running: "text-blue-500",
+  awaiting_review: "text-amber-600",
+  approved: "text-green-600",
+  failed: "text-red-600",
 };
 
 export default function StageProgress({ stages, activeStage, onStageClick }: Props) {
@@ -37,14 +37,13 @@ export default function StageProgress({ stages, activeStage, onStageClick }: Pro
           onClick={() => onStageClick(s.stage_number)}
           className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition ${
             activeStage === s.stage_number
-              ? "bg-white/10 border border-white/20"
-              : "hover:bg-white/5"
+              ? "bg-white border border-[#D4C9BC] shadow-sm"
+              : "hover:bg-white/60"
           }`}
         >
-          {/* Connector line */}
           <div className="flex flex-col items-center w-6">
             <span
-              className={`text-lg ${STATUS_COLOR[s.status] || "text-white/20"} ${
+              className={`text-lg ${STATUS_COLOR[s.status] || "text-[#B0A396]"} ${
                 s.status === "running" ? "animate-pulse" : ""
               }`}
             >
@@ -53,17 +52,17 @@ export default function StageProgress({ stages, activeStage, onStageClick }: Pro
             {i < stages.length - 1 && (
               <div
                 className={`w-px h-4 mt-1 ${
-                  s.status === "approved" ? "bg-green-400/30" : "bg-white/10"
+                  s.status === "approved" ? "bg-green-300" : "bg-[#E8E0D6]"
                 }`}
               />
             )}
           </div>
 
           <div className="min-w-0">
-            <p className="text-sm font-medium truncate">{s.stage_name}</p>
+            <p className="text-sm font-medium text-[#1a1a1a] truncate">{s.stage_name}</p>
             <p
               className={`text-xs capitalize ${
-                STATUS_COLOR[s.status] || "text-white/30"
+                STATUS_COLOR[s.status] || "text-[#B0A396]"
               }`}
             >
               {s.status.replace("_", " ")}

@@ -29,8 +29,8 @@ export default function SoundtrackChoice({ projectId, onContinue }: Props) {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold mb-2">Soundtrack</h2>
-        <p className="text-white/50">
+        <h2 className="text-2xl font-bold text-[#1a1a1a] mb-2">Soundtrack</h2>
+        <p className="text-[#8C7E6F]">
           Upload your own music or let Friday generate an AI soundtrack after
           the video is ready.
         </p>
@@ -40,8 +40,8 @@ export default function SoundtrackChoice({ projectId, onContinue }: Props) {
         <label
           className={`flex items-start gap-4 p-4 rounded-xl border cursor-pointer transition ${
             mode === "ai_generate"
-              ? "border-white/30 bg-white/5"
-              : "border-white/10 hover:border-white/20"
+              ? "border-[#6B5B4E] bg-white shadow-sm"
+              : "border-[#E8E0D6] bg-white hover:border-[#D4C9BC]"
           }`}
           onClick={() => setMode("ai_generate")}
         >
@@ -49,12 +49,12 @@ export default function SoundtrackChoice({ projectId, onContinue }: Props) {
             type="radio"
             checked={mode === "ai_generate"}
             onChange={() => setMode("ai_generate")}
-            className="mt-1"
+            className="mt-1 accent-[#6B5B4E]"
           />
           <div>
-            <p className="font-medium">AI-Generated Soundtrack</p>
-            <p className="text-sm text-white/50">
-              Friday will compose an instrumental score via Suno that matches
+            <p className="font-medium text-[#1a1a1a]">AI-Generated Soundtrack</p>
+            <p className="text-sm text-[#8C7E6F]">
+              Friday will compose an instrumental score that matches
               your video&apos;s mood and pacing. You&apos;ll review and approve
               it before final assembly.
             </p>
@@ -64,8 +64,8 @@ export default function SoundtrackChoice({ projectId, onContinue }: Props) {
         <label
           className={`flex items-start gap-4 p-4 rounded-xl border cursor-pointer transition ${
             mode === "upload"
-              ? "border-white/30 bg-white/5"
-              : "border-white/10 hover:border-white/20"
+              ? "border-[#6B5B4E] bg-white shadow-sm"
+              : "border-[#E8E0D6] bg-white hover:border-[#D4C9BC]"
           }`}
           onClick={() => setMode("upload")}
         >
@@ -73,11 +73,11 @@ export default function SoundtrackChoice({ projectId, onContinue }: Props) {
             type="radio"
             checked={mode === "upload"}
             onChange={() => setMode("upload")}
-            className="mt-1"
+            className="mt-1 accent-[#6B5B4E]"
           />
           <div>
-            <p className="font-medium">Upload My Own</p>
-            <p className="text-sm text-white/50">
+            <p className="font-medium text-[#1a1a1a]">Upload My Own</p>
+            <p className="text-sm text-[#8C7E6F]">
               Use your own audio file. MP3, WAV, AAC, M4A, or FLAC.
             </p>
           </div>
@@ -87,12 +87,12 @@ export default function SoundtrackChoice({ projectId, onContinue }: Props) {
       {mode === "upload" && (
         <div
           onClick={() => fileRef.current?.click()}
-          className="border-2 border-dashed border-white/10 rounded-xl p-6 text-center cursor-pointer hover:border-white/20 transition"
+          className="border-2 border-dashed border-[#D4C9BC] rounded-xl p-6 text-center cursor-pointer hover:border-[#6B5B4E] transition bg-white"
         >
           {file ? (
-            <p className="text-white/70">{file.name}</p>
+            <p className="text-[#1a1a1a]">{file.name}</p>
           ) : (
-            <p className="text-white/40">Click to select audio file</p>
+            <p className="text-[#8C7E6F]">Click to select audio file</p>
           )}
           <input
             ref={fileRef}
@@ -107,7 +107,7 @@ export default function SoundtrackChoice({ projectId, onContinue }: Props) {
       <button
         onClick={handleContinue}
         disabled={saving || (mode === "upload" && !file)}
-        className="px-6 py-3 bg-white text-black rounded-lg font-medium hover:bg-white/90 transition disabled:opacity-30 disabled:cursor-not-allowed"
+        className="px-6 py-3 bg-[#6B5B4E] text-white rounded-lg font-medium hover:bg-[#5A4A3E] transition disabled:opacity-30 disabled:cursor-not-allowed"
       >
         {saving ? "Saving..." : "Continue"}
       </button>

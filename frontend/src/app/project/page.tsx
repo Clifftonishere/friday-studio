@@ -62,7 +62,7 @@ function ProjectDashboardInner() {
 
   if (!id) {
     return (
-      <div className="flex items-center justify-center h-96 text-white/50">
+      <div className="flex items-center justify-center h-96 text-[#8C7E6F]">
         No project ID provided
       </div>
     );
@@ -70,7 +70,7 @@ function ProjectDashboardInner() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-96 text-white/50">
+      <div className="flex items-center justify-center h-96 text-[#8C7E6F]">
         Loading project...
       </div>
     );
@@ -78,7 +78,7 @@ function ProjectDashboardInner() {
 
   if (!project) {
     return (
-      <div className="flex items-center justify-center h-96 text-white/50">
+      <div className="flex items-center justify-center h-96 text-[#8C7E6F]">
         Project not found
       </div>
     );
@@ -89,10 +89,10 @@ function ProjectDashboardInner() {
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold">
+          <h1 className="text-2xl font-bold text-[#1a1a1a]">
             {project.title as string}
           </h1>
-          <p className="text-sm text-white/40 mt-1">
+          <p className="text-sm text-[#8C7E6F] mt-1">
             {project.status as string} &middot; Stage{" "}
             {project.current_stage as number}/6
           </p>
@@ -101,8 +101,8 @@ function ProjectDashboardInner() {
           <div
             className={`px-3 py-1.5 rounded-lg text-xs ${
               lastEvent.type === "error"
-                ? "bg-red-500/20 text-red-400"
-                : "bg-blue-500/20 text-blue-400"
+                ? "bg-red-100 text-red-700"
+                : "bg-blue-100 text-blue-700"
             }`}
           >
             {lastEvent.type.replace("_", " ")}
@@ -125,10 +125,10 @@ function ProjectDashboardInner() {
           {currentStage && (
             <div className="mb-6 flex items-center justify-between">
               <div>
-                <h2 className="text-xl font-semibold">
+                <h2 className="text-xl font-semibold text-[#1a1a1a]">
                   {currentStage.stage_name}
                 </h2>
-                <p className="text-sm text-white/40 capitalize">
+                <p className="text-sm text-[#8C7E6F] capitalize">
                   {currentStage.status.replace("_", " ")}
                 </p>
               </div>
@@ -144,26 +144,26 @@ function ProjectDashboardInner() {
           )}
 
           {currentStage?.status === "running" && (
-            <div className="flex items-center justify-center h-64 text-white/40">
+            <div className="flex items-center justify-center h-64 text-[#8C7E6F]">
               <div className="text-center">
-                <div className="animate-pulse text-4xl mb-4">&#x25D4;</div>
+                <div className="animate-pulse text-4xl mb-4 text-[#6B5B4E]">&#x25D4;</div>
                 <p>Friday is working on {currentStage.stage_name}...</p>
               </div>
             </div>
           )}
 
           {currentStage?.status === "pending" && (
-            <div className="flex items-center justify-center h-64 text-white/30">
+            <div className="flex items-center justify-center h-64 text-[#B0A396]">
               <p>Waiting for previous stages to complete</p>
             </div>
           )}
 
           {loadingAssets ? (
-            <p className="text-white/40">Loading assets...</p>
+            <p className="text-[#8C7E6F]">Loading assets...</p>
           ) : assets.length === 0 &&
             currentStage?.status !== "running" &&
             currentStage?.status !== "pending" ? (
-            <p className="text-white/30">No assets generated yet</p>
+            <p className="text-[#B0A396]">No assets generated yet</p>
           ) : (
             <div className="grid grid-cols-2 gap-4">
               {assets.map((asset) => (
@@ -181,7 +181,7 @@ export default function ProjectDashboard() {
   return (
     <Suspense
       fallback={
-        <div className="flex items-center justify-center h-96 text-white/50">
+        <div className="flex items-center justify-center h-96 text-[#8C7E6F]">
           Loading...
         </div>
       }

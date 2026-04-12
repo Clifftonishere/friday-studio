@@ -52,50 +52,50 @@ export default function ReviewConfirm({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold mb-2">Review & Start</h2>
-        <p className="text-white/50">
+        <h2 className="text-2xl font-bold text-[#1a1a1a] mb-2">Review & Start</h2>
+        <p className="text-[#8C7E6F]">
           Confirm everything looks good. Friday will start working once you hit
           the button.
         </p>
       </div>
 
-      <div className="space-y-4 p-5 rounded-xl border border-white/10 bg-white/5">
+      <div className="space-y-4 p-5 rounded-xl bg-white border border-[#E8E0D6]">
         <div>
-          <p className="text-xs text-white/30 uppercase tracking-wider mb-1">
+          <p className="text-xs text-[#B0A396] uppercase tracking-wider mb-1">
             Project
           </p>
-          <p className="font-semibold">{title}</p>
+          <p className="font-semibold text-[#1a1a1a]">{title}</p>
         </div>
 
         <div>
-          <p className="text-xs text-white/30 uppercase tracking-wider mb-1">
+          <p className="text-xs text-[#B0A396] uppercase tracking-wider mb-1">
             Brief
           </p>
-          <p className="text-sm text-white/70">{brief}</p>
+          <p className="text-sm text-[#6B5B4E]">{brief}</p>
         </div>
 
         <div>
-          <p className="text-xs text-white/30 uppercase tracking-wider mb-1">
+          <p className="text-xs text-[#B0A396] uppercase tracking-wider mb-1">
             Media
           </p>
-          <p className="text-sm text-white/70">
+          <p className="text-sm text-[#6B5B4E]">
             {photoCount} photo{photoCount !== 1 ? "s" : ""}
             {videoCount > 0 &&
               `, ${videoCount} video${videoCount !== 1 ? "s" : ""}`}
           </p>
           <div className="flex gap-3 mt-1">
             {animeCount > 0 && (
-              <span className="text-xs px-2 py-0.5 rounded bg-purple-500/20 text-purple-400">
+              <span className="text-xs px-2 py-0.5 rounded bg-purple-100 text-purple-700">
                 {animeCount} anime
               </span>
             )}
             {pixarCount > 0 && (
-              <span className="text-xs px-2 py-0.5 rounded bg-blue-500/20 text-blue-400">
+              <span className="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-700">
                 {pixarCount} pixar
               </span>
             )}
             {originalCount > 0 && (
-              <span className="text-xs px-2 py-0.5 rounded bg-white/10 text-white/50">
+              <span className="text-xs px-2 py-0.5 rounded bg-[#F5F0EA] text-[#8C7E6F]">
                 {originalCount} original
               </span>
             )}
@@ -103,25 +103,25 @@ export default function ReviewConfirm({
         </div>
 
         <div>
-          <p className="text-xs text-white/30 uppercase tracking-wider mb-1">
+          <p className="text-xs text-[#B0A396] uppercase tracking-wider mb-1">
             Soundtrack
           </p>
-          <p className="text-sm text-white/70">
+          <p className="text-sm text-[#6B5B4E]">
             {soundtrackMode === "ai_generate"
-              ? "AI-generated (Suno)"
+              ? "AI-generated"
               : "User-uploaded"}
           </p>
         </div>
       </div>
 
       {error && (
-        <p className="text-red-400 text-sm">{error}</p>
+        <p className="text-red-600 text-sm">{error}</p>
       )}
 
       <button
         onClick={handleStart}
         disabled={starting}
-        className="w-full px-6 py-4 bg-white text-black rounded-lg font-bold text-lg hover:bg-white/90 transition disabled:opacity-50"
+        className="w-full px-6 py-4 bg-[#6B5B4E] text-white rounded-lg font-bold text-lg hover:bg-[#5A4A3E] transition disabled:opacity-50"
       >
         {starting ? "Starting Friday..." : "Start Production"}
       </button>

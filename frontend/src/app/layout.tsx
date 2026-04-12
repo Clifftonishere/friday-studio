@@ -27,9 +27,9 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-[#0a0a0a] text-[#ededed]">
-        <header className="border-b border-white/10 px-6 py-4">
-          <a href="/" className="text-xl font-bold tracking-tight">
+      <body className="min-h-full flex flex-col bg-[#FAF6F1] text-[#1a1a1a]">
+        <header className="border-b border-[#E8E0D6] bg-white px-6 py-4">
+          <a href="/" className="text-xl font-bold tracking-tight text-[#6B5B4E]">
             Friday Studio
           </a>
         </header>

@@ -14,6 +14,9 @@ from backend.worker import run_stage, event_queues
 router = APIRouter(tags=["feedback"])
 
 
+TOTAL_STAGES = 6
+
+
 def _get_stage_number_for_asset(asset_id: str) -> tuple[str, int]:
     """Return (project_id, stage_number) for an asset."""
     from backend.database import get_db
@@ -26,6 +29,26 @@ def _get_stage_number_for_asset(asset_id: str) -> tuple[str, int]:
     if not row:
         raise HTTPException(404, "Asset not found")
     return row["project_id"], row["stage_number"]
+
+
+async def _advance_after_stage_approved(project_id: str, stage_num: int):
+    """Mark the stage approved, notify SSE, and kick off the next stage if any.
+
+    Called from both the per-asset approve path and the bulk approve path
+    after they've verified that all assets in the stage are approved.
+    Assumes the stage has already been marked approved by the caller.
+    """
+    queue = event_queues.setdefault(project_id, asyncio.Queue())
+    await queue.put({"type": "stage_approved", "data": {"stage": stage_num}})
+
+    next_stage_num = stage_num + 1
+    if next_stage_num <= TOTAL_STAGES:
+        next_stage = get_stage(project_id, next_stage_num)
+        if next_stage and next_stage["status"] == "pending":
+            update_project(project_id, current_stage=next_stage_num)
+            asyncio.create_task(run_stage(project_id, next_stage_num, queue))
+    else:
+        update_project(project_id, status="completed")
 
 
 @router.post("/assets/{asset_id}/approve")
@@ -43,18 +66,7 @@ async def api_approve_asset(asset_id: str):
         stage = get_stage(project_id, stage_num)
         update_stage(stage["id"], status="approved")
         update_project(project_id, current_stage=stage_num)
-
-        queue = event_queues.setdefault(project_id, asyncio.Queue())
-        await queue.put({"type": "stage_approved", "data": {"stage": stage_num}})
-
-        next_stage_num = stage_num + 1
-        if next_stage_num <= 6:
-            next_stage = get_stage(project_id, next_stage_num)
-            if next_stage and next_stage["status"] == "pending":
-                update_project(project_id, current_stage=next_stage_num)
-                asyncio.create_task(run_stage(project_id, next_stage_num, queue))
-        else:
-            update_project(project_id, status="completed")
+        await _advance_after_stage_approved(project_id, stage_num)
 
     return {"ok": True, "status": "approved"}
 
@@ -83,17 +95,6 @@ async def api_approve_all(project_id: str, stage_num: int):
     if check_stage_all_approved(project_id, stage_num):
         stage = get_stage(project_id, stage_num)
         update_stage(stage["id"], status="approved")
-
-        queue = event_queues.setdefault(project_id, asyncio.Queue())
-        await queue.put({"type": "stage_approved", "data": {"stage": stage_num}})
-
-        next_stage_num = stage_num + 1
-        if next_stage_num <= 6:
-            next_stage = get_stage(project_id, next_stage_num)
-            if next_stage and next_stage["status"] == "pending":
-                update_project(project_id, current_stage=next_stage_num)
-                asyncio.create_task(run_stage(project_id, next_stage_num, queue))
-        else:
-            update_project(project_id, status="completed")
+        await _advance_after_stage_approved(project_id, stage_num)
 
     return {"ok": True}

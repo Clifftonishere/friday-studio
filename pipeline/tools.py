@@ -172,6 +172,44 @@ def _fal_headers():
     }
 
 
+def _fal_queue_poll(model: str, request_id: str) -> dict:
+    """Poll fal.ai queue for job status."""
+    resp = requests.get(
+        f"{FAL_QUEUE_URL}/{model}/requests/{request_id}/status",
+        headers=_fal_headers(),
+        params={"logs": "1"},
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
+def _fal_queue_get_result(model: str, request_id: str) -> dict:
+    """Fetch the completed result from the fal.ai queue."""
+    resp = requests.get(
+        f"{FAL_QUEUE_URL}/{model}/requests/{request_id}",
+        headers=_fal_headers(),
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
+def _fal_queue_wait(model: str, request_id: str, poll_interval: int, timeout: int, label: str) -> dict:
+    """Wait for a fal.ai queue job to complete.
+
+    Polls _fal_queue_poll until the status is COMPLETED, then fetches and
+    returns the result. Raises on FAILED status or timeout.
+    """
+    start = time.time()
+    while time.time() - start < timeout:
+        status = _fal_queue_poll(model, request_id)
+        if status.get("status") == "COMPLETED":
+            return _fal_queue_get_result(model, request_id)
+        if status.get("status") == "FAILED":
+            raise RuntimeError(f"{label} failed: {status}")
+        time.sleep(poll_interval)
+    raise TimeoutError(f"{label} timed out after {timeout}s")
+
+
 def kling_image_to_video(image_path, prompt, duration=5, negative_prompt="blur, distort, low quality"):
     """Animate a keyframe via Kling 2.6 Pro on fal.ai.
 
@@ -211,13 +249,7 @@ def kling_poll_video(request_id):
 
     Returns dict with status: IN_QUEUE, IN_PROGRESS, or COMPLETED.
     """
-    resp = requests.get(
-        f"{FAL_QUEUE_URL}/{FAL_KLING_MODEL}/requests/{request_id}/status",
-        headers=_fal_headers(),
-        params={"logs": "1"},
-    )
-    resp.raise_for_status()
-    return resp.json()
+    return _fal_queue_poll(FAL_KLING_MODEL, request_id)
 
 
 def kling_get_result(request_id):
@@ -225,12 +257,7 @@ def kling_get_result(request_id):
 
     Returns dict with video.url on success.
     """
-    resp = requests.get(
-        f"{FAL_QUEUE_URL}/{FAL_KLING_MODEL}/requests/{request_id}",
-        headers=_fal_headers(),
-    )
-    resp.raise_for_status()
-    return resp.json()
+    return _fal_queue_get_result(FAL_KLING_MODEL, request_id)
 
 
 def kling_wait_for_video(request_id, poll_interval=5, timeout=900):
@@ -241,15 +268,10 @@ def kling_wait_for_video(request_id, poll_interval=5, timeout=900):
     Returns:
         dict with video URL on success, raises on failure/timeout
     """
-    start = time.time()
-    while time.time() - start < timeout:
-        status = kling_poll_video(request_id)
-        if status.get("status") == "COMPLETED":
-            return kling_get_result(request_id)
-        if status.get("status") == "FAILED":
-            raise RuntimeError(f"Kling video generation failed: {status}")
-        time.sleep(poll_interval)
-    raise TimeoutError(f"Kling video generation timed out after {timeout}s")
+    return _fal_queue_wait(
+        FAL_KLING_MODEL, request_id, poll_interval, timeout,
+        "Kling video generation",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -381,23 +403,12 @@ def music_generate(prompt, instrumental=True):
 
 def music_poll(request_id):
     """Poll fal.ai queue for music generation status."""
-    resp = requests.get(
-        f"{FAL_QUEUE_URL}/{FAL_MINIMAX_MODEL}/requests/{request_id}/status",
-        headers=_fal_headers(),
-        params={"logs": "1"},
-    )
-    resp.raise_for_status()
-    return resp.json()
+    return _fal_queue_poll(FAL_MINIMAX_MODEL, request_id)
 
 
 def music_get_result(request_id):
     """Fetch the completed audio result from fal.ai."""
-    resp = requests.get(
-        f"{FAL_QUEUE_URL}/{FAL_MINIMAX_MODEL}/requests/{request_id}",
-        headers=_fal_headers(),
-    )
-    resp.raise_for_status()
-    return resp.json()
+    return _fal_queue_get_result(FAL_MINIMAX_MODEL, request_id)
 
 
 def music_wait_for_result(request_id, poll_interval=5, timeout=300):
@@ -406,12 +417,7 @@ def music_wait_for_result(request_id, poll_interval=5, timeout=300):
     Returns:
         dict with audio URL on success, raises on failure/timeout
     """
-    start = time.time()
-    while time.time() - start < timeout:
-        status = music_poll(request_id)
-        if status.get("status") == "COMPLETED":
-            return music_get_result(request_id)
-        if status.get("status") == "FAILED":
-            raise RuntimeError(f"Music generation failed: {status}")
-        time.sleep(poll_interval)
-    raise TimeoutError(f"Music generation timed out after {timeout}s")
+    return _fal_queue_wait(
+        FAL_MINIMAX_MODEL, request_id, poll_interval, timeout,
+        "Music generation",
+    )

@@ -6,7 +6,9 @@ and pushes SSE events to connected clients.
 
 import asyncio
 import json
+import os
 from datetime import datetime, timezone
+from pathlib import Path
 
 from backend.database import (
     get_project, get_stage, update_stage, update_project,
@@ -14,8 +16,17 @@ from backend.database import (
     create_asset, STAGE_NAMES,
 )
 
+DATA_DIR = os.environ.get("FRIDAY_DATA_DIR", "/data")
+
 # Global event queues: one per active project
 event_queues: dict[str, asyncio.Queue] = {}
+
+
+def _project_subdir(project_id: str, subdir: str) -> Path:
+    """Return the per-project output directory for a given subdir, creating it."""
+    path = Path(f"{DATA_DIR}/projects/{project_id}/{subdir}")
+    path.mkdir(parents=True, exist_ok=True)
+    return path
 
 
 def _now() -> str:
@@ -124,9 +135,7 @@ def _stage_2_characters(project_id: str, stage_id: str) -> list[dict]:
 
     uploads = get_uploads(project_id)
     styled_uploads = [u for u in uploads if u["style"] in ("anime", "pixar") and u["media_type"] == "photo"]
-    data_dir = os.environ.get("FRIDAY_DATA_DIR", "/data")
-    char_dir = Path(f"{data_dir}/projects/{project_id}/characters")
-    char_dir.mkdir(parents=True, exist_ok=True)
+    char_dir = _project_subdir(project_id, "characters")
 
     assets = []
     for upload in styled_uploads:
@@ -159,9 +168,7 @@ def _stage_3_scenes(project_id: str, stage_id: str) -> list[dict]:
     from pathlib import Path
     from pipeline.tools import gpt4o_scene_with_ref, neolemon_generate
 
-    data_dir = os.environ.get("FRIDAY_DATA_DIR", "/data")
-    scene_dir = Path(f"{data_dir}/projects/{project_id}/scenes")
-    scene_dir.mkdir(parents=True, exist_ok=True)
+    scene_dir = _project_subdir(project_id, "scenes")
 
     script_assets = get_assets(project_id, stage_number=1, asset_type="script", status="approved")
     if not script_assets:
@@ -211,9 +218,7 @@ def _stage_4_animation(project_id: str, stage_id: str) -> list[dict]:
     from pathlib import Path
     from pipeline.tools import kling_image_to_video, kling_wait_for_video
 
-    data_dir = os.environ.get("FRIDAY_DATA_DIR", "/data")
-    clip_dir = Path(f"{data_dir}/projects/{project_id}/clips")
-    clip_dir.mkdir(parents=True, exist_ok=True)
+    clip_dir = _project_subdir(project_id, "clips")
 
     keyframes = get_assets(project_id, stage_number=3, asset_type="keyframe", status="approved")
     if not keyframes:
@@ -291,11 +296,7 @@ def _stage_5_audio(project_id: str, stage_id: str) -> list[dict]:
 
     music_result = music_generate(music_prompt, instrumental=True)
 
-    import os
-    from pathlib import Path
-    data_dir = os.environ.get("FRIDAY_DATA_DIR", "/data")
-    audio_dir = Path(f"{data_dir}/projects/{project_id}/audio")
-    audio_dir.mkdir(parents=True, exist_ok=True)
+    audio_dir = _project_subdir(project_id, "audio")
     out_path = str(audio_dir / "soundtrack_v1.mp3")
 
     # fal.ai queue: if we got a request_id, poll for completion
@@ -330,9 +331,7 @@ def _stage_6_assembly(project_id: str, stage_id: str) -> list[dict]:
     import os, subprocess, json
     from pathlib import Path
 
-    data_dir = os.environ.get("FRIDAY_DATA_DIR", "/data")
-    assembly_dir = Path(f"{data_dir}/projects/{project_id}/assembly")
-    assembly_dir.mkdir(parents=True, exist_ok=True)
+    assembly_dir = _project_subdir(project_id, "assembly")
 
     clips = get_assets(project_id, stage_number=4, asset_type="clip", status="approved")
     audio_assets = get_assets(project_id, stage_number=5, asset_type="audio", status="approved")

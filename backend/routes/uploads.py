@@ -20,6 +20,13 @@ ALLOWED_IMAGE_TYPES = {".jpg", ".jpeg", ".png", ".webp", ".heic"}
 ALLOWED_VIDEO_TYPES = {".mp4", ".mov", ".avi", ".mkv", ".webm"}
 ALLOWED_AUDIO_TYPES = {".mp3", ".wav", ".aac", ".m4a", ".flac"}
 
+VALID_STYLES = ("original", "anime", "pixar")
+
+
+def _validate_style(style: str):
+    if style not in VALID_STYLES:
+        raise HTTPException(400, "Style must be original, anime, or pixar")
+
 
 def _classify_media(filename: str) -> str:
     ext = Path(filename).suffix.lower()
@@ -39,8 +46,7 @@ async def api_upload_media(
     project = get_project(project_id)
     if not project:
         raise HTTPException(404, "Project not found")
-    if style not in ("original", "anime", "pixar"):
-        raise HTTPException(400, "Style must be original, anime, or pixar")
+    _validate_style(style)
 
     media_type = _classify_media(file.filename)
     upload_dir = Path(f"{DATA_DIR}/projects/{project_id}/uploads")
@@ -59,16 +65,14 @@ async def api_upload_media(
 
 @router.patch("/projects/{project_id}/uploads/{upload_id}")
 def api_update_upload_style(project_id: str, upload_id: str, body: UploadStyleUpdate):
-    if body.style not in ("original", "anime", "pixar"):
-        raise HTTPException(400, "Style must be original, anime, or pixar")
+    _validate_style(body.style)
     update_upload_style(upload_id, body.style)
     return {"ok": True}
 
 
 @router.patch("/projects/{project_id}/uploads/bulk-style")
 def api_bulk_update_style(project_id: str, body: BulkStyleUpdate):
-    if body.style not in ("original", "anime", "pixar"):
-        raise HTTPException(400, "Style must be original, anime, or pixar")
+    _validate_style(body.style)
     bulk_update_upload_style(project_id, body.style)
     return {"ok": True}
 

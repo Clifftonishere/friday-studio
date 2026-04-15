@@ -4,24 +4,9 @@ import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useProject } from "@/lib/hooks";
 import { getStageAssets, approveAllStage } from "@/lib/api";
+import type { Asset, Stage } from "@/lib/types";
 import StageProgress from "@/components/review/StageProgress";
 import AssetCard from "@/components/review/AssetCard";
-
-interface Asset {
-  id: string;
-  asset_type: string;
-  file_path: string | null;
-  text_content: string | null;
-  version: number;
-  status: string;
-  metadata: string | null;
-}
-
-interface Stage {
-  stage_number: number;
-  stage_name: string;
-  status: string;
-}
 
 function ProjectDashboardInner() {
   const searchParams = useSearchParams();

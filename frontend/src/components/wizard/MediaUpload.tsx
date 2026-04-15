@@ -7,14 +7,7 @@ import {
   bulkUpdateStyle,
   deleteUpload,
 } from "@/lib/api";
-
-interface Upload {
-  id: string;
-  filename: string;
-  media_type: string;
-  style: string;
-  url?: string;
-}
+import type { Upload } from "@/lib/types";
 
 interface Props {
   projectId: string;

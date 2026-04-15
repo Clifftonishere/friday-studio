@@ -1,10 +1,6 @@
 "use client";
 
-interface Stage {
-  stage_number: number;
-  stage_name: string;
-  status: string;
-}
+import type { Stage } from "@/lib/types";
 
 interface Props {
   stages: Stage[];

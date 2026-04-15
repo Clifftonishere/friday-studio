@@ -3,19 +3,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createProject } from "@/lib/api";
+import type { Upload } from "@/lib/types";
 import BriefForm from "@/components/wizard/BriefForm";
 import MediaUpload from "@/components/wizard/MediaUpload";
 import SoundtrackChoice from "@/components/wizard/SoundtrackChoice";
 import ReviewConfirm from "@/components/wizard/ReviewConfirm";
 
 const STEPS = ["Brief", "Media", "Soundtrack", "Review"];
-
-interface Upload {
-  id: string;
-  filename: string;
-  media_type: string;
-  style: string;
-}
 
 export default function NewProjectPage() {
   const router = useRouter();

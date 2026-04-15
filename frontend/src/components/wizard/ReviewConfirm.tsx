@@ -2,13 +2,7 @@
 
 import { useState } from "react";
 import { startPipeline } from "@/lib/api";
-
-interface Upload {
-  id: string;
-  filename: string;
-  media_type: string;
-  style: string;
-}
+import type { Upload } from "@/lib/types";
 
 interface Props {
   projectId: string;

@@ -3,17 +3,8 @@
 import { useState } from "react";
 import { approveAsset, rejectAsset } from "@/lib/api";
 import { fileUrl } from "@/lib/api";
+import type { Asset } from "@/lib/types";
 import FeedbackPanel from "./FeedbackPanel";
-
-interface Asset {
-  id: string;
-  asset_type: string;
-  file_path: string | null;
-  text_content: string | null;
-  version: number;
-  status: string;
-  metadata: string | null;
-}
 
 interface Props {
   asset: Asset;

@@ -5,8 +5,9 @@ import asyncio
 from fastapi import APIRouter, HTTPException
 
 from backend.database import (
-    get_asset, update_asset, create_feedback,
+    get_db, get_asset, update_asset, create_feedback,
     check_stage_all_approved, get_stage, update_stage, update_project,
+    get_assets,
 )
 from backend.models import FeedbackCreate
 from backend.worker import run_stage, event_queues
@@ -19,7 +20,6 @@ TOTAL_STAGES = 6
 
 def _get_stage_number_for_asset(asset_id: str) -> tuple[str, int]:
     """Return (project_id, stage_number) for an asset."""
-    from backend.database import get_db
     conn = get_db()
     row = conn.execute(
         "SELECT a.project_id, s.stage_number FROM assets a JOIN stages s ON a.stage_id = s.id WHERE a.id=?",
@@ -85,8 +85,7 @@ async def api_reject_asset(asset_id: str, body: FeedbackCreate):
 
 @router.post("/projects/{project_id}/stages/{stage_num}/approve-all")
 async def api_approve_all(project_id: str, stage_num: int):
-    from backend.database import get_assets as _get_assets
-    assets = _get_assets(project_id, stage_number=stage_num)
+    assets = get_assets(project_id, stage_number=stage_num)
     for asset in assets:
         if asset["status"] == "pending_review":
             update_asset(asset["id"], status="approved")

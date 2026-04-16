@@ -49,7 +49,7 @@ def gpt4o_master_character_sheet(image_path, style_prompt=None):
     Uses GPT-4o's image generation with the reference photo as input.
     Returns the API response containing the generated character sheet image.
     """
-    from prompts import ANIME_MASTER_CHARACTER_SHEET
+    from pipeline.prompts import ANIME_MASTER_CHARACTER_SHEET
 
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
@@ -85,7 +85,7 @@ def gpt4o_scene_with_ref(master_ref_path, scene_photo_path, scene_description):
 
     Uses the ANIME_SCENE_WITH_REF prompt template to ensure character consistency.
     """
-    from prompts import ANIME_SCENE_WITH_REF
+    from pipeline.prompts import ANIME_SCENE_WITH_REF
 
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:

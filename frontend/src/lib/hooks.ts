@@ -2,13 +2,9 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { getProject, API_URL } from "./api";
+import type { Project, SSEEvent, SSEEventData } from "./types";
 
-interface SSEEvent {
-  type: string;
-  data: Record<string, unknown>;
-}
-
-function useProjectEvents(projectId: string | null) {
+function useProjectEvents(projectId: string | null): SSEEvent | null {
   const [lastEvent, setLastEvent] = useState<SSEEvent | null>(null);
 
   useEffect(() => {
@@ -16,14 +12,14 @@ function useProjectEvents(projectId: string | null) {
 
     const source = new EventSource(`${API_URL}/api/projects/${projectId}/events`);
 
-    const handleEvent = (type: string) => (e: MessageEvent) => {
+    const handleEvent = (type: SSEEvent["type"]) => (e: MessageEvent) => {
       try {
-        const data = JSON.parse(e.data);
+        const data: SSEEventData = JSON.parse(e.data);
         setLastEvent({ type, data });
       } catch {}
     };
 
-    const eventTypes = [
+    const eventTypes: SSEEvent["type"][] = [
       "stage_started",
       "asset_generated",
       "stage_complete",
@@ -39,7 +35,7 @@ function useProjectEvents(projectId: string | null) {
 }
 
 export function useProject(projectId: string | null) {
-  const [project, setProject] = useState<Record<string, unknown> | null>(null);
+  const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
   const lastEvent = useProjectEvents(projectId);
 

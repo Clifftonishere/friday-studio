@@ -1,17 +1,35 @@
 """Friday Studio — Media upload routes."""
 
+from __future__ import annotations
+
 import os
 import shutil
 import uuid
 from pathlib import Path
+from typing import TypedDict
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 
 from backend.database import (
     get_project, create_upload, update_upload_style,
     bulk_update_upload_style, delete_upload, set_soundtrack_config,
+    UploadDict,
 )
 from backend.models import UploadStyleUpdate, BulkStyleUpdate, SoundtrackConfig
+
+
+class UploadResponse(UploadDict, total=False):
+    """Upload dict extended with the URL field added by the route."""
+    url: str
+
+
+class OkResponse(TypedDict):
+    ok: bool
+
+
+class OkModeResponse(TypedDict):
+    ok: bool
+    mode: str
 
 router = APIRouter(tags=["uploads"])
 DATA_DIR = os.environ.get("FRIDAY_DATA_DIR", "/data")
@@ -23,7 +41,7 @@ ALLOWED_AUDIO_TYPES = {".mp3", ".wav", ".aac", ".m4a", ".flac"}
 VALID_STYLES = ("original", "anime", "pixar")
 
 
-def _validate_style(style: str):
+def _validate_style(style: str) -> None:
     if style not in VALID_STYLES:
         raise HTTPException(400, "Style must be original, anime, or pixar")
 
@@ -58,27 +76,27 @@ async def api_upload_media(
     with open(file_path, "wb") as f:
         shutil.copyfileobj(file.file, f)
 
-    upload = create_upload(project_id, file.filename, file_path, media_type, style)
+    upload: dict[str, object] = dict(create_upload(project_id, file.filename, file_path, media_type, style))
     upload["url"] = f"/files/{project_id}/uploads/{safe_name}"
     return upload
 
 
 @router.patch("/projects/{project_id}/uploads/{upload_id}")
-def api_update_upload_style(project_id: str, upload_id: str, body: UploadStyleUpdate):
+def api_update_upload_style(project_id: str, upload_id: str, body: UploadStyleUpdate) -> OkResponse:
     _validate_style(body.style)
     update_upload_style(upload_id, body.style)
     return {"ok": True}
 
 
 @router.patch("/projects/{project_id}/uploads/bulk-style")
-def api_bulk_update_style(project_id: str, body: BulkStyleUpdate):
+def api_bulk_update_style(project_id: str, body: BulkStyleUpdate) -> OkResponse:
     _validate_style(body.style)
     bulk_update_upload_style(project_id, body.style)
     return {"ok": True}
 
 
 @router.delete("/projects/{project_id}/uploads/{upload_id}")
-def api_delete_upload(project_id: str, upload_id: str):
+def api_delete_upload(project_id: str, upload_id: str) -> OkResponse:
     delete_upload(upload_id)
     return {"ok": True}
 
@@ -110,4 +128,4 @@ async def api_set_soundtrack(
             shutil.copyfileobj(file.file, f)
 
     set_soundtrack_config(project_id, mode, uploaded_path)
-    return {"ok": True, "mode": mode}
+    return OkModeResponse(ok=True, mode=mode)

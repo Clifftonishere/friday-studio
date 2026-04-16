@@ -1,6 +1,9 @@
 """Friday Studio — Asset approval/rejection routes."""
 
+from __future__ import annotations
+
 import asyncio
+from typing import TypedDict
 
 from fastapi import APIRouter, HTTPException
 
@@ -18,6 +21,21 @@ router = APIRouter(tags=["feedback"])
 TOTAL_STAGES = 6
 
 
+class ApproveResponse(TypedDict):
+    ok: bool
+    status: str
+
+
+class RejectResponse(TypedDict):
+    ok: bool
+    status: str
+    comment: str | None
+
+
+class OkResponse(TypedDict):
+    ok: bool
+
+
 def _get_stage_number_for_asset(asset_id: str) -> tuple[str, int]:
     """Return (project_id, stage_number) for an asset."""
     conn = get_db()
@@ -31,7 +49,7 @@ def _get_stage_number_for_asset(asset_id: str) -> tuple[str, int]:
     return row["project_id"], row["stage_number"]
 
 
-async def _advance_after_stage_approved(project_id: str, stage_num: int):
+async def _advance_after_stage_approved(project_id: str, stage_num: int) -> None:
     """Mark the stage approved, notify SSE, and kick off the next stage if any.
 
     Called from both the per-asset approve path and the bulk approve path
@@ -52,7 +70,7 @@ async def _advance_after_stage_approved(project_id: str, stage_num: int):
 
 
 @router.post("/assets/{asset_id}/approve")
-async def api_approve_asset(asset_id: str):
+async def api_approve_asset(asset_id: str) -> ApproveResponse:
     asset = get_asset(asset_id)
     if not asset:
         raise HTTPException(404, "Asset not found")
@@ -72,7 +90,7 @@ async def api_approve_asset(asset_id: str):
 
 
 @router.post("/assets/{asset_id}/reject")
-async def api_reject_asset(asset_id: str, body: FeedbackCreate):
+async def api_reject_asset(asset_id: str, body: FeedbackCreate) -> RejectResponse:
     asset = get_asset(asset_id)
     if not asset:
         raise HTTPException(404, "Asset not found")
@@ -84,7 +102,7 @@ async def api_reject_asset(asset_id: str, body: FeedbackCreate):
 
 
 @router.post("/projects/{project_id}/stages/{stage_num}/approve-all")
-async def api_approve_all(project_id: str, stage_num: int):
+async def api_approve_all(project_id: str, stage_num: int) -> OkResponse:
     assets = get_assets(project_id, stage_number=stage_num)
     for asset in assets:
         if asset["status"] == "pending_review":

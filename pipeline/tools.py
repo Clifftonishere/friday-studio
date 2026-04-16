@@ -9,19 +9,77 @@ Tool routing:
   - All agent reasoning runs on Anthropic Claude (configured in pipeline.py).
 """
 
+from __future__ import annotations
+
 import os
 import base64
 import time
+from typing import Any, Callable, TypedDict, TypeVar
+
 import requests
 from pathlib import Path
+
+
+T = TypeVar("T")
+
+
+# ---------------------------------------------------------------------------
+# API response TypedDicts
+# ---------------------------------------------------------------------------
+
+class OpenAIImageData(TypedDict, total=False):
+    b64_json: str
+    url: str
+
+
+class OpenAIImageResponse(TypedDict):
+    data: list[OpenAIImageData]
+
+
+class ChatMessageContent(TypedDict):
+    content: str
+
+
+class ChatChoice(TypedDict):
+    message: ChatMessageContent
+
+
+class ChatCompletionResponse(TypedDict):
+    choices: list[ChatChoice]
+
+
+class FalQueueSubmitResponse(TypedDict):
+    request_id: str
+    status_url: str
+    response_url: str
+
+
+class FalQueueStatusResponse(TypedDict, total=False):
+    status: str
+    logs: list[dict[str, Any]]
+
+
+class KlingVideoResult(TypedDict, total=False):
+    video: dict[str, str]
+
+
+class MusicAudioFile(TypedDict, total=False):
+    url: str
+
+
+class MusicResult(TypedDict, total=False):
+    audio: MusicAudioFile | str
+    audio_file: MusicAudioFile
+    url: str
+    request_id: str
 
 MAX_RETRIES = 3
 RETRY_DELAY = 2
 
 
-def _retry(fn, retries=MAX_RETRIES):
+def _retry(fn: Callable[[], T], retries: int = MAX_RETRIES) -> T:
     """Retry a function with exponential backoff. Returns result or raises last error."""
-    last_err = None
+    last_err: Exception | None = None
     for attempt in range(retries):
         try:
             result = fn()
@@ -30,10 +88,10 @@ def _retry(fn, retries=MAX_RETRIES):
             last_err = e
             if attempt < retries - 1:
                 time.sleep(RETRY_DELAY * (attempt + 1))
-    raise last_err
+    raise last_err  # type: ignore[misc]
 
 
-def _load_image_b64(image_path):
+def _load_image_b64(image_path: str) -> str:
     """Load an image file and return base64-encoded string."""
     with open(image_path, "rb") as f:
         return base64.b64encode(f.read()).decode()
@@ -43,7 +101,7 @@ def _load_image_b64(image_path):
 # GPT-4o — Anime style transfer (image generation, NOT chat reasoning)
 # ---------------------------------------------------------------------------
 
-def gpt4o_master_character_sheet(image_path, style_prompt=None):
+def gpt4o_master_character_sheet(image_path: str, style_prompt: str | None = None) -> OpenAIImageResponse:
     """Generate a master anime character sheet from a reference photo.
 
     Uses GPT-4o's image generation with the reference photo as input.
@@ -76,7 +134,7 @@ def gpt4o_master_character_sheet(image_path, style_prompt=None):
     return _retry(_call)
 
 
-def gpt4o_scene_with_ref(master_ref_path, scene_photo_path, scene_description):
+def gpt4o_scene_with_ref(master_ref_path: str, scene_photo_path: str, scene_description: str) -> ChatCompletionResponse:
     """Generate an anime scene keyframe, maintaining character consistency.
 
     Two-image input:
@@ -131,7 +189,7 @@ def gpt4o_scene_with_ref(master_ref_path, scene_photo_path, scene_description):
 # Neolemon V3 — Pixar/Disney 3D style (via Segmind API)
 # ---------------------------------------------------------------------------
 
-def neolemon_generate(prompt, reference_image_path=None):
+def neolemon_generate(prompt: str, reference_image_path: str | None = None) -> requests.Response:
     """Generate Pixar-style image via Neolemon V3 on Segmind."""
     api_key = os.environ.get("SEGMIND_API_KEY")
     if not api_key:
@@ -161,7 +219,7 @@ FAL_KLING_MODEL = "fal-ai/kling-video/v2.6/pro/image-to-video"
 FAL_QUEUE_URL = "https://queue.fal.run"
 
 
-def _fal_headers():
+def _fal_headers() -> dict[str, str]:
     """Get fal.ai auth headers."""
     fal_key = os.environ.get("FAL_KEY")
     if not fal_key:
@@ -172,7 +230,7 @@ def _fal_headers():
     }
 
 
-def _fal_queue_poll(model: str, request_id: str) -> dict:
+def _fal_queue_poll(model: str, request_id: str) -> FalQueueStatusResponse:
     """Poll fal.ai queue for job status."""
     resp = requests.get(
         f"{FAL_QUEUE_URL}/{model}/requests/{request_id}/status",
@@ -183,7 +241,7 @@ def _fal_queue_poll(model: str, request_id: str) -> dict:
     return resp.json()
 
 
-def _fal_queue_get_result(model: str, request_id: str) -> dict:
+def _fal_queue_get_result(model: str, request_id: str) -> dict[str, Any]:
     """Fetch the completed result from the fal.ai queue."""
     resp = requests.get(
         f"{FAL_QUEUE_URL}/{model}/requests/{request_id}",
@@ -193,7 +251,7 @@ def _fal_queue_get_result(model: str, request_id: str) -> dict:
     return resp.json()
 
 
-def _fal_queue_wait(model: str, request_id: str, poll_interval: int, timeout: int, label: str) -> dict:
+def _fal_queue_wait(model: str, request_id: str, poll_interval: int, timeout: int, label: str) -> dict[str, Any]:
     """Wait for a fal.ai queue job to complete.
 
     Polls _fal_queue_poll until the status is COMPLETED, then fetches and
@@ -210,7 +268,7 @@ def _fal_queue_wait(model: str, request_id: str, poll_interval: int, timeout: in
     raise TimeoutError(f"{label} timed out after {timeout}s")
 
 
-def kling_image_to_video(image_path, prompt, duration=5, negative_prompt="blur, distort, low quality"):
+def kling_image_to_video(image_path: str, prompt: str, duration: int = 5, negative_prompt: str = "blur, distort, low quality") -> FalQueueSubmitResponse:
     """Animate a keyframe via Kling 2.6 Pro on fal.ai.
 
     Submits to fal.ai's queue and returns the request_id for polling.
@@ -244,7 +302,7 @@ def kling_image_to_video(image_path, prompt, duration=5, negative_prompt="blur, 
     return _retry(_call)
 
 
-def kling_wait_for_video(request_id, poll_interval=5, timeout=900):
+def kling_wait_for_video(request_id: str, poll_interval: int = 5, timeout: int = 900) -> dict[str, Any]:
     """Wait for Kling video generation to complete on fal.ai.
 
     Kling takes 5-14 minutes typically, so timeout defaults to 15 min.
@@ -265,7 +323,7 @@ def kling_wait_for_video(request_id, poll_interval=5, timeout=900):
 FAL_MINIMAX_MODEL = "fal-ai/minimax-music"
 
 
-def music_generate(prompt, instrumental=True):
+def music_generate(prompt: str, instrumental: bool = True) -> FalQueueSubmitResponse:
     """Generate audio via MiniMax Music on fal.ai.
 
     Uses the same FAL_KEY as Kling video generation.
@@ -294,7 +352,7 @@ def music_generate(prompt, instrumental=True):
     return _retry(_call)
 
 
-def music_wait_for_result(request_id, poll_interval=5, timeout=300):
+def music_wait_for_result(request_id: str, poll_interval: int = 5, timeout: int = 300) -> dict[str, Any]:
     """Wait for music generation to complete on fal.ai.
 
     Returns:

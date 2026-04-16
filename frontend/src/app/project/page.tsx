@@ -16,9 +16,9 @@ function ProjectDashboardInner() {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [loadingAssets, setLoadingAssets] = useState(false);
 
-  const stages = (project?.stages as Stage[]) || [];
+  const stages = project?.stages ?? [];
   const currentStage = stages.find(
-    (s: Stage) => s.stage_number === activeStage
+    (s) => s.stage_number === activeStage
   );
 
   useEffect(() => {
@@ -32,7 +32,7 @@ function ProjectDashboardInner() {
 
   useEffect(() => {
     if (project?.current_stage) {
-      setActiveStage(project.current_stage as number);
+      setActiveStage(project.current_stage);
     }
   }, [project?.current_stage]);
 
@@ -75,11 +75,11 @@ function ProjectDashboardInner() {
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold text-[#1a1a1a]">
-            {project.title as string}
+            {project.title}
           </h1>
           <p className="text-sm text-[#8C7E6F] mt-1">
-            {project.status as string} &middot; Stage{" "}
-            {project.current_stage as number}/6
+            {project.status} &middot; Stage{" "}
+            {project.current_stage}/6
           </p>
         </div>
         {lastEvent && (

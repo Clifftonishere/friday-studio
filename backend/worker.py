@@ -4,22 +4,53 @@ Dispatches pipeline stages as async tasks, updates the database,
 and pushes SSE events to connected clients.
 """
 
+from __future__ import annotations
+
 import asyncio
 import json
 import os
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, TypedDict
 
 from backend.database import (
     get_project, get_stage, update_stage, update_project,
     get_assets, get_uploads, get_soundtrack_config,
-    create_asset, STAGE_NAMES,
+    create_asset, STAGE_NAMES, AssetDict,
 )
+
+
+# ---------------------------------------------------------------------------
+# SSE event types pushed to the queue
+# ---------------------------------------------------------------------------
+
+class StageStartedData(TypedDict):
+    stage: int
+    name: str
+
+
+class StageCompleteData(TypedDict):
+    stage: int
+    asset_count: int
+
+
+class StageApprovedData(TypedDict):
+    stage: int
+
+
+class ErrorData(TypedDict):
+    stage: int
+    message: str
+
+
+class SSEEvent(TypedDict):
+    type: str
+    data: StageStartedData | StageCompleteData | StageApprovedData | ErrorData
 
 DATA_DIR = os.environ.get("FRIDAY_DATA_DIR", "/data")
 
 # Global event queues: one per active project
-event_queues: dict[str, asyncio.Queue] = {}
+event_queues: dict[str, asyncio.Queue[SSEEvent]] = {}
 
 
 def _project_subdir(project_id: str, subdir: str) -> Path:
@@ -33,7 +64,7 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-async def run_stage(project_id: str, stage_num: int, queue: asyncio.Queue):
+async def run_stage(project_id: str, stage_num: int, queue: asyncio.Queue[SSEEvent]) -> None:
     """Run a pipeline stage in a background thread."""
     stage = get_stage(project_id, stage_num)
     if not stage:
@@ -62,7 +93,7 @@ async def run_stage(project_id: str, stage_num: int, queue: asyncio.Queue):
         })
 
 
-def _run_stage_sync(project_id: str, stage_num: int, stage_id: str) -> list[dict]:
+def _run_stage_sync(project_id: str, stage_num: int, stage_id: str) -> list[AssetDict]:
     """Synchronous stage execution — runs in a thread pool."""
     runners = {
         1: _stage_1_script,
@@ -82,7 +113,7 @@ def _run_stage_sync(project_id: str, stage_num: int, stage_id: str) -> list[dict
 # Stage implementations
 # ---------------------------------------------------------------------------
 
-def _stage_1_script(project_id: str, stage_id: str) -> list[dict]:
+def _stage_1_script(project_id: str, stage_id: str) -> list[AssetDict]:
     """Script Writer: Generate scene-by-scene breakdown from brief."""
     from crewai import Agent, Task, Crew, Process
 
@@ -127,7 +158,7 @@ def _stage_1_script(project_id: str, stage_id: str) -> list[dict]:
     return [asset]
 
 
-def _stage_2_characters(project_id: str, stage_id: str) -> list[dict]:
+def _stage_2_characters(project_id: str, stage_id: str) -> list[AssetDict]:
     """Character Designer: Generate character sheets from uploaded photos."""
     from pipeline.tools import gpt4o_master_character_sheet, neolemon_generate
 
@@ -160,7 +191,7 @@ def _stage_2_characters(project_id: str, stage_id: str) -> list[dict]:
     return assets
 
 
-def _stage_3_scenes(project_id: str, stage_id: str) -> list[dict]:
+def _stage_3_scenes(project_id: str, stage_id: str) -> list[AssetDict]:
     """Scene Composer: Generate keyframes for each scene."""
     from pipeline.tools import gpt4o_scene_with_ref, neolemon_generate
 
@@ -208,7 +239,7 @@ def _stage_3_scenes(project_id: str, stage_id: str) -> list[dict]:
     return assets
 
 
-def _stage_4_animation(project_id: str, stage_id: str) -> list[dict]:
+def _stage_4_animation(project_id: str, stage_id: str) -> list[AssetDict]:
     """Animator: Convert keyframes to animated clips via Kling on fal.ai."""
     from pipeline.tools import kling_image_to_video, kling_wait_for_video
 
@@ -247,7 +278,7 @@ def _stage_4_animation(project_id: str, stage_id: str) -> list[dict]:
     return assets
 
 
-def _stage_5_audio(project_id: str, stage_id: str) -> list[dict]:
+def _stage_5_audio(project_id: str, stage_id: str) -> list[AssetDict]:
     """Audio Producer: Generate soundtrack via MiniMax Music or use uploaded audio."""
     config = get_soundtrack_config(project_id)
 
@@ -320,7 +351,7 @@ def _stage_5_audio(project_id: str, stage_id: str) -> list[dict]:
     return [asset]
 
 
-def _stage_6_assembly(project_id: str, stage_id: str) -> list[dict]:
+def _stage_6_assembly(project_id: str, stage_id: str) -> list[AssetDict]:
     """Assembly Editor: Stitch all clips + audio into final video."""
     import subprocess
 
@@ -364,7 +395,7 @@ def _stage_6_assembly(project_id: str, stage_id: str) -> list[dict]:
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _save_openai_image(api_result: dict, out_path: str):
+def _save_openai_image(api_result: dict[str, Any], out_path: str) -> None:
     """Save image from OpenAI image generation response."""
     import base64
     data = api_result.get("data", [{}])[0]
@@ -375,14 +406,14 @@ def _save_openai_image(api_result: dict, out_path: str):
         _download_file(data["url"], out_path)
 
 
-def _save_response_image(response, out_path: str):
+def _save_response_image(response: Any, out_path: str) -> None:
     """Save image from a requests.Response (Segmind etc)."""
     if hasattr(response, "content"):
         with open(out_path, "wb") as f:
             f.write(response.content)
 
 
-def _save_chat_response_image(api_result: dict, out_path: str):
+def _save_chat_response_image(api_result: dict[str, Any], out_path: str) -> None:
     """Save image URL from GPT-4o chat completion vision response."""
     try:
         content = api_result["choices"][0]["message"]["content"]
@@ -395,7 +426,7 @@ def _save_chat_response_image(api_result: dict, out_path: str):
         pass
 
 
-def _download_file(url: str, out_path: str):
+def _download_file(url: str, out_path: str) -> None:
     """Download a file from a URL."""
     import requests
     resp = requests.get(url, timeout=120)

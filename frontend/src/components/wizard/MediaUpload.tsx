@@ -7,7 +7,7 @@ import {
   bulkUpdateStyle,
   deleteUpload,
 } from "@/lib/api";
-import type { Upload } from "@/lib/types";
+import type { Upload, StyleType } from "@/lib/types";
 
 interface Props {
   projectId: string;
@@ -35,14 +35,14 @@ export default function MediaUpload({ projectId, onContinue }: Props) {
     setUploading(false);
   };
 
-  const handleStyleChange = async (uploadId: string, style: string) => {
+  const handleStyleChange = async (uploadId: string, style: StyleType) => {
     await updateUploadStyle(projectId, uploadId, style);
     setUploads((prev) =>
       prev.map((u) => (u.id === uploadId ? { ...u, style } : u))
     );
   };
 
-  const handleBulkStyle = async (style: string) => {
+  const handleBulkStyle = async (style: StyleType) => {
     setGlobalStyle(style);
     await bulkUpdateStyle(projectId, style);
     setUploads((prev) => prev.map((u) => ({ ...u, style })));
@@ -130,7 +130,7 @@ export default function MediaUpload({ projectId, onContinue }: Props) {
               <div className="flex items-center gap-2">
                 <select
                   value={u.style}
-                  onChange={(e) => handleStyleChange(u.id, e.target.value)}
+                  onChange={(e) => handleStyleChange(u.id, e.target.value as StyleType)}
                   className="bg-white border border-[#E8E0D6] rounded px-2 py-1 text-sm text-[#1a1a1a]"
                 >
                   {STYLES.map((s) => (

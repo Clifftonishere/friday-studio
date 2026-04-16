@@ -37,7 +37,7 @@ RUN mkdir -p /data && chown node:node /data
 
 USER node
 
-# Start FastAPI (pipeline runs in-process as background tasks)
+# Start FastAPI
 WORKDIR /home/node/app
 ENV PATH="/home/node/crewai-env/bin:$PATH"
 ENV FRIDAY_DATA_DIR="/data"

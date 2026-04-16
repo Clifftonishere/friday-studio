@@ -1,4 +1,4 @@
-"""Friday Studio — Media upload routes."""
+"""Media upload routes."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Friday Studio — API Tool Wrappers
+"""API tool wrappers for external generation services.
 
 Tool routing:
   - GPT-4o: Image generation only (anime style transfer). Called via OpenAI API.
@@ -77,7 +77,6 @@ RETRY_DELAY = 2
 
 
 def _retry(fn: Callable[[], T], retries: int = MAX_RETRIES) -> T:
-    """Retry a function with exponential backoff. Returns result or raises last error."""
     last_err: Exception | None = None
     for attempt in range(retries):
         try:
@@ -91,7 +90,6 @@ def _retry(fn: Callable[[], T], retries: int = MAX_RETRIES) -> T:
 
 
 def _load_image_b64(image_path: str) -> str:
-    """Load an image file and return base64-encoded string."""
     with open(image_path, "rb") as f:
         return base64.b64encode(f.read()).decode()
 
@@ -101,11 +99,7 @@ def _load_image_b64(image_path: str) -> str:
 # ---------------------------------------------------------------------------
 
 def gpt4o_master_character_sheet(image_path: str, style_prompt: str | None = None) -> OpenAIImageResponse:
-    """Generate a master anime character sheet from a reference photo.
-
-    Uses GPT-4o's image generation with the reference photo as input.
-    Returns the API response containing the generated character sheet image.
-    """
+    """Generate a master anime character sheet from a reference photo."""
     from pipeline.prompts import ANIME_MASTER_CHARACTER_SHEET
 
     api_key = os.environ.get("OPENAI_API_KEY")
@@ -134,14 +128,7 @@ def gpt4o_master_character_sheet(image_path: str, style_prompt: str | None = Non
 
 
 def gpt4o_scene_with_ref(master_ref_path: str, scene_photo_path: str, scene_description: str) -> ChatCompletionResponse:
-    """Generate an anime scene keyframe, maintaining character consistency.
-
-    Two-image input:
-      - Image 1 (master_ref_path): The approved master character sheet
-      - Image 2 (scene_photo_path): The new scene photo to convert
-
-    Uses the ANIME_SCENE_WITH_REF prompt template to ensure character consistency.
-    """
+    """Generate an anime scene keyframe using the master character sheet for consistency."""
     from pipeline.prompts import ANIME_SCENE_WITH_REF
 
     api_key = os.environ.get("OPENAI_API_KEY")
@@ -189,7 +176,6 @@ def gpt4o_scene_with_ref(master_ref_path: str, scene_photo_path: str, scene_desc
 # ---------------------------------------------------------------------------
 
 def neolemon_generate(prompt: str, reference_image_path: str | None = None) -> requests.Response:
-    """Generate Pixar-style image via Neolemon V3 on Segmind."""
     api_key = os.environ.get("SEGMIND_API_KEY")
     if not api_key:
         raise ValueError("SEGMIND_API_KEY not set")
@@ -219,7 +205,6 @@ FAL_QUEUE_URL = "https://queue.fal.run"
 
 
 def _fal_headers() -> dict[str, str]:
-    """Get fal.ai auth headers."""
     fal_key = os.environ.get("FAL_KEY")
     if not fal_key:
         raise ValueError("FAL_KEY not set")
@@ -230,7 +215,6 @@ def _fal_headers() -> dict[str, str]:
 
 
 def _fal_queue_poll(model: str, request_id: str) -> FalQueueStatusResponse:
-    """Poll fal.ai queue for job status."""
     resp = requests.get(
         f"{FAL_QUEUE_URL}/{model}/requests/{request_id}/status",
         headers=_fal_headers(),
@@ -241,7 +225,6 @@ def _fal_queue_poll(model: str, request_id: str) -> FalQueueStatusResponse:
 
 
 def _fal_queue_get_result(model: str, request_id: str) -> dict[str, Any]:
-    """Fetch the completed result from the fal.ai queue."""
     resp = requests.get(
         f"{FAL_QUEUE_URL}/{model}/requests/{request_id}",
         headers=_fal_headers(),
@@ -251,11 +234,7 @@ def _fal_queue_get_result(model: str, request_id: str) -> dict[str, Any]:
 
 
 def _fal_queue_wait(model: str, request_id: str, poll_interval: int, timeout: int, label: str) -> dict[str, Any]:
-    """Wait for a fal.ai queue job to complete.
-
-    Polls _fal_queue_poll until the status is COMPLETED, then fetches and
-    returns the result. Raises on FAILED status or timeout.
-    """
+    """Poll until COMPLETED, then return the result. Raises on FAILED or timeout."""
     start = time.time()
     while time.time() - start < timeout:
         status = _fal_queue_poll(model, request_id)
@@ -268,19 +247,7 @@ def _fal_queue_wait(model: str, request_id: str, poll_interval: int, timeout: in
 
 
 def kling_image_to_video(image_path: str, prompt: str, duration: int = 5, negative_prompt: str = "blur, distort, low quality") -> FalQueueSubmitResponse:
-    """Animate a keyframe via Kling 2.6 Pro on fal.ai.
-
-    Submits to fal.ai's queue and returns the request_id for polling.
-
-    Args:
-        image_path: Path to the styled keyframe image
-        prompt: Motion description prompt
-        duration: 5 or 10 seconds
-        negative_prompt: What to avoid in generation
-
-    Returns:
-        dict with request_id, status_url, response_url
-    """
+    """Submit a keyframe to Kling 2.6 Pro on fal.ai. Returns request_id for polling."""
     img_b64 = _load_image_b64(image_path)
     image_uri = f"data:image/png;base64,{img_b64}"
 
@@ -302,13 +269,7 @@ def kling_image_to_video(image_path: str, prompt: str, duration: int = 5, negati
 
 
 def kling_wait_for_video(request_id: str, poll_interval: int = 5, timeout: int = 900) -> dict[str, Any]:
-    """Wait for Kling video generation to complete on fal.ai.
-
-    Kling takes 5-14 minutes typically, so timeout defaults to 15 min.
-
-    Returns:
-        dict with video URL on success, raises on failure/timeout
-    """
+    """Poll until Kling video is ready. Timeout defaults to 15 min (typical: 5-14 min)."""
     return _fal_queue_wait(
         FAL_KLING_MODEL, request_id, poll_interval, timeout,
         "Kling video generation",
@@ -323,17 +284,6 @@ FAL_MINIMAX_MODEL = "fal-ai/minimax-music"
 
 
 def music_generate(prompt: str, instrumental: bool = True) -> FalQueueSubmitResponse:
-    """Generate audio via MiniMax Music on fal.ai.
-
-    Uses the same FAL_KEY as Kling video generation.
-
-    Args:
-        prompt: Text description of the music (genre, mood, tempo, structure)
-        instrumental: If True, generates instrumental only (no vocals)
-
-    Returns:
-        dict with request_id for polling, or completed result
-    """
     if instrumental and "instrumental" not in prompt.lower():
         prompt = f"[Instrumental] {prompt}"
 
@@ -352,11 +302,6 @@ def music_generate(prompt: str, instrumental: bool = True) -> FalQueueSubmitResp
 
 
 def music_wait_for_result(request_id: str, poll_interval: int = 5, timeout: int = 300) -> dict[str, Any]:
-    """Wait for music generation to complete on fal.ai.
-
-    Returns:
-        dict with audio URL on success, raises on failure/timeout
-    """
     return _fal_queue_wait(
         FAL_MINIMAX_MODEL, request_id, poll_interval, timeout,
         "Music generation",

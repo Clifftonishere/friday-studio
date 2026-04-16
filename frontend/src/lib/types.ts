@@ -1,5 +1,3 @@
-// Shared API/domain types used across the Friday Studio frontend.
-
 // ---------------------------------------------------------------------------
 // Domain types
 // ---------------------------------------------------------------------------
@@ -90,7 +88,7 @@ export interface Project {
 }
 
 // ---------------------------------------------------------------------------
-// SSE event data shapes (from backend/worker.py)
+// SSE event data shapes
 // ---------------------------------------------------------------------------
 
 export interface StageStartedData {

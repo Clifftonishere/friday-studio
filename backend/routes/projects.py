@@ -1,4 +1,4 @@
-"""Friday Studio — Project CRUD routes."""
+"""Project CRUD routes."""
 
 from fastapi import APIRouter, HTTPException
 

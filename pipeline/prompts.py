@@ -1,4 +1,4 @@
-"""Friday Studio — Prompt Templates"""
+"""Prompt templates for style transfer and scene generation."""
 
 ANIME_MASTER_CHARACTER_SHEET = """
 Convert this photo into anime style in the exact style of Hajime no Ippo

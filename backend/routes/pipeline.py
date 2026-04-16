@@ -1,4 +1,4 @@
-"""Friday Studio — Pipeline control routes."""
+"""Pipeline control routes."""
 
 from __future__ import annotations
 
@@ -49,7 +49,6 @@ async def api_start_pipeline(project_id: str) -> PipelineStartResponse:
 
 @router.post("/projects/{project_id}/stages/{stage_num}/run")
 async def api_run_stage(project_id: str, stage_num: int) -> StageRunResponse:
-    """Manually trigger a specific stage (for re-runs)."""
     stage = get_stage(project_id, stage_num)
     if not stage:
         raise HTTPException(404, "Stage not found")

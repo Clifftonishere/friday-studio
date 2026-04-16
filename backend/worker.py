@@ -1,4 +1,4 @@
-"""Friday Studio — Background stage runner.
+"""Background stage runner.
 
 Dispatches pipeline stages as async tasks, updates the database,
 and pushes SSE events to connected clients.
@@ -54,7 +54,6 @@ event_queues: dict[str, asyncio.Queue[SSEEvent]] = {}
 
 
 def _project_subdir(project_id: str, subdir: str) -> Path:
-    """Return the per-project output directory for a given subdir, creating it."""
     path = Path(f"{DATA_DIR}/projects/{project_id}/{subdir}")
     path.mkdir(parents=True, exist_ok=True)
     return path
@@ -65,7 +64,6 @@ def _now() -> str:
 
 
 async def run_stage(project_id: str, stage_num: int, queue: asyncio.Queue[SSEEvent]) -> None:
-    """Run a pipeline stage in a background thread."""
     stage = get_stage(project_id, stage_num)
     if not stage:
         return
@@ -94,7 +92,6 @@ async def run_stage(project_id: str, stage_num: int, queue: asyncio.Queue[SSEEve
 
 
 def _run_stage_sync(project_id: str, stage_num: int, stage_id: str) -> list[AssetDict]:
-    """Synchronous stage execution — runs in a thread pool."""
     runners = {
         1: _stage_1_script,
         2: _stage_2_characters,
@@ -396,7 +393,6 @@ def _stage_6_assembly(project_id: str, stage_id: str) -> list[AssetDict]:
 # ---------------------------------------------------------------------------
 
 def _save_openai_image(api_result: dict[str, Any], out_path: str) -> None:
-    """Save image from OpenAI image generation response."""
     import base64
     data = api_result.get("data", [{}])[0]
     if "b64_json" in data:
@@ -407,14 +403,13 @@ def _save_openai_image(api_result: dict[str, Any], out_path: str) -> None:
 
 
 def _save_response_image(response: Any, out_path: str) -> None:
-    """Save image from a requests.Response (Segmind etc)."""
     if hasattr(response, "content"):
         with open(out_path, "wb") as f:
             f.write(response.content)
 
 
 def _save_chat_response_image(api_result: dict[str, Any], out_path: str) -> None:
-    """Save image URL from GPT-4o chat completion vision response."""
+    """Extract and download the first URL from a GPT-4o chat vision response."""
     content = api_result["choices"][0]["message"]["content"]
     if "http" in content:
         import re
@@ -424,7 +419,6 @@ def _save_chat_response_image(api_result: dict[str, Any], out_path: str) -> None
 
 
 def _download_file(url: str, out_path: str) -> None:
-    """Download a file from a URL."""
     import requests
     resp = requests.get(url, timeout=120)
     resp.raise_for_status()

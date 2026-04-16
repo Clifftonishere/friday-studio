@@ -1,4 +1,4 @@
-"""Friday Studio — Asset approval/rejection routes."""
+"""Asset approval/rejection routes."""
 
 from __future__ import annotations
 
@@ -37,7 +37,6 @@ class OkResponse(TypedDict):
 
 
 def _get_stage_number_for_asset(asset_id: str) -> tuple[str, int]:
-    """Return (project_id, stage_number) for an asset."""
     conn = get_db()
     row = conn.execute(
         "SELECT a.project_id, s.stage_number FROM assets a JOIN stages s ON a.stage_id = s.id WHERE a.id=?",
@@ -50,12 +49,7 @@ def _get_stage_number_for_asset(asset_id: str) -> tuple[str, int]:
 
 
 async def _advance_after_stage_approved(project_id: str, stage_num: int) -> None:
-    """Mark the stage approved, notify SSE, and kick off the next stage if any.
-
-    Called from both the per-asset approve path and the bulk approve path
-    after they've verified that all assets in the stage are approved.
-    Assumes the stage has already been marked approved by the caller.
-    """
+    """Notify SSE and kick off the next stage. Caller must have already marked the stage approved."""
     queue = event_queues.setdefault(project_id, asyncio.Queue())
     await queue.put({"type": "stage_approved", "data": {"stage": stage_num}})
 

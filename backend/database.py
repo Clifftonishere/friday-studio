@@ -1,4 +1,4 @@
-"""Friday Studio — SQLite database layer."""
+"""SQLite database layer."""
 
 from __future__ import annotations
 
@@ -25,7 +25,6 @@ class ProjectDict(TypedDict):
 
 
 class ProjectDetailDict(ProjectDict):
-    """Extended project dict returned by get_project (includes relations)."""
     uploads: list[UploadDict]
     stages: list[StageDict]
     soundtrack: SoundtrackConfigDict | None
@@ -99,7 +98,6 @@ def get_db() -> sqlite3.Connection:
 
 
 def init_db() -> None:
-    """Create tables if they don't exist."""
     Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
     conn = get_db()
     conn.executescript("""
@@ -419,7 +417,6 @@ def get_soundtrack_config(project_id: str) -> SoundtrackConfigDict | None:
 # ---------------------------------------------------------------------------
 
 def check_stage_all_approved(project_id: str, stage_number: int) -> bool:
-    """Check if all assets in a stage are approved."""
     conn = get_db()
     stage = conn.execute("SELECT id FROM stages WHERE project_id=? AND stage_number=?", (project_id, stage_number)).fetchone()
     if not stage:

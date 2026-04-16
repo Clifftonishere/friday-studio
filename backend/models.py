@@ -1,4 +1,4 @@
-"""Friday Studio — Pydantic models for API request/response."""
+"""Pydantic models for API request/response."""
 
 from __future__ import annotations
 

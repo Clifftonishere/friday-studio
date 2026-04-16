@@ -66,8 +66,8 @@ friday-studio/
 ├── config/           # Dockerfile, docker-compose, .env
 ├── docs/             # Architecture, setup, testing logs
 ├── examples/         # Example projects
-├── scripts/          # Deploy and install scripts
-└── workspace/        # Friday bot personality
+├── scripts/          # Deploy scripts
+└── workspace/        # Friday system prompt
 ```
 
 ## API Keys Required
@@ -78,7 +78,6 @@ friday-studio/
 | `OPENAI_API_KEY` | OpenAI | GPT-4o anime style transfer |
 | `SEGMIND_API_KEY` | Segmind | Neolemon V3 Pixar generation |
 | `FAL_KEY` | fal.ai | Kling video + MiniMax Music audio |
-| `GROK_API_KEY` | xAI | Grok Imagine (fallback video) |
 
 ## What Was Tested and Eliminated
 
@@ -88,10 +87,8 @@ friday-studio/
 | fal.ai SDXL + LoRA | :x: | Lost character entirely |
 | AniFun.ai | :x: | Unacceptable quality |
 | Kling 3.0 (direct) | :x: | Quality not up to par with raw photo input |
-| Grok (text-to-video) | :x: | All failure modes |
-| Grok (i2v with real photo) | :warning: | Uncanny middle ground |
 | Stability AI SVD | :x: | API sunset July 2025, max 2s output |
-| **GPT-4o keyframe + Kling i2v** | :white_check_mark: | **Best quality, validated** |
+| **GPT-4o keyframe + Kling 2.6 Pro i2v** | :white_check_mark: | **Best quality, validated** |
 
 ## Author
 

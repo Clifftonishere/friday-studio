@@ -3,8 +3,7 @@
 Tool routing:
   - GPT-4o: Image generation only (anime style transfer). Called via OpenAI API.
   - Neolemon V3: Image generation only (Pixar style). Called via Segmind API.
-  - Kling AI: Video generation (animate keyframes, primary). Called via fal.ai proxy.
-  - Grok Imagine: Video generation (animate keyframes, fallback). Called via xAI API.
+  - Kling AI: Video generation (animate keyframes). Called via fal.ai proxy.
   - MiniMax Music: Audio generation. Called via fal.ai proxy (same FAL_KEY).
   - All agent reasoning runs on Anthropic Claude (configured in pipeline.py).
 """

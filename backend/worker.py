@@ -415,15 +415,12 @@ def _save_response_image(response: Any, out_path: str) -> None:
 
 def _save_chat_response_image(api_result: dict[str, Any], out_path: str) -> None:
     """Save image URL from GPT-4o chat completion vision response."""
-    try:
-        content = api_result["choices"][0]["message"]["content"]
-        if "http" in content:
-            import re
-            urls = re.findall(r'https?://\S+', content)
-            if urls:
-                _download_file(urls[0], out_path)
-    except (KeyError, IndexError):
-        pass
+    content = api_result["choices"][0]["message"]["content"]
+    if "http" in content:
+        import re
+        urls = re.findall(r'https?://\S+', content)
+        if urls:
+            _download_file(urls[0], out_path)
 
 
 def _download_file(url: str, out_path: str) -> None:

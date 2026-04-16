@@ -13,10 +13,8 @@ function useProjectEvents(projectId: string | null): SSEEvent | null {
     const source = new EventSource(`${API_URL}/api/projects/${projectId}/events`);
 
     const handleEvent = (type: SSEEvent["type"]) => (e: MessageEvent) => {
-      try {
-        const data: SSEEventData = JSON.parse(e.data);
-        setLastEvent({ type, data });
-      } catch {}
+      const data: SSEEventData = JSON.parse(e.data);
+      setLastEvent({ type, data });
     };
 
     const eventTypes: SSEEvent["type"][] = [
@@ -41,14 +39,9 @@ export function useProject(projectId: string | null) {
 
   const refresh = useCallback(async () => {
     if (!projectId) return;
-    try {
-      const data = await getProject(projectId);
-      setProject(data);
-    } catch (err) {
-      console.error("Failed to fetch project:", err);
-    } finally {
-      setLoading(false);
-    }
+    const data = await getProject(projectId);
+    setProject(data);
+    setLoading(false);
   }, [projectId]);
 
   useEffect(() => {

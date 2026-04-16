@@ -25,12 +25,8 @@ export default function MediaUpload({ projectId, onContinue }: Props) {
   const handleFiles = async (files: FileList) => {
     setUploading(true);
     for (const file of Array.from(files)) {
-      try {
-        const result = await uploadMedia(projectId, file, globalStyle);
-        setUploads((prev) => [...prev, result]);
-      } catch (err) {
-        console.error("Upload failed:", err);
-      }
+      const result = await uploadMedia(projectId, file, globalStyle);
+      setUploads((prev) => [...prev, result]);
     }
     setUploading(false);
   };

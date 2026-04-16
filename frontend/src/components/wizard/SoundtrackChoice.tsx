@@ -16,14 +16,9 @@ export default function SoundtrackChoice({ projectId, onContinue }: Props) {
 
   const handleContinue = async () => {
     setSaving(true);
-    try {
-      await setSoundtrack(projectId, mode, file || undefined);
-      onContinue();
-    } catch (err) {
-      console.error("Failed to set soundtrack:", err);
-    } finally {
-      setSaving(false);
-    }
+    await setSoundtrack(projectId, mode, file || undefined);
+    onContinue();
+    setSaving(false);
   };
 
   return (

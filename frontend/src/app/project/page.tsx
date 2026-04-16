@@ -26,7 +26,6 @@ function ProjectDashboardInner() {
     setLoadingAssets(true);
     getStageAssets(id, activeStage)
       .then(setAssets)
-      .catch(console.error)
       .finally(() => setLoadingAssets(false));
   }, [id, activeStage, lastEvent]);
 

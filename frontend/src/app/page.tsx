@@ -27,7 +27,6 @@ export default function HomePage() {
   useEffect(() => {
     listProjects()
       .then(setProjects)
-      .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
 

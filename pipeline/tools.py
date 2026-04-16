@@ -244,22 +244,6 @@ def kling_image_to_video(image_path, prompt, duration=5, negative_prompt="blur, 
     return _retry(_call)
 
 
-def kling_poll_video(request_id):
-    """Poll fal.ai queue for Kling video generation status.
-
-    Returns dict with status: IN_QUEUE, IN_PROGRESS, or COMPLETED.
-    """
-    return _fal_queue_poll(FAL_KLING_MODEL, request_id)
-
-
-def kling_get_result(request_id):
-    """Fetch the completed video result from fal.ai.
-
-    Returns dict with video.url on success.
-    """
-    return _fal_queue_get_result(FAL_KLING_MODEL, request_id)
-
-
 def kling_wait_for_video(request_id, poll_interval=5, timeout=900):
     """Wait for Kling video generation to complete on fal.ai.
 
@@ -272,97 +256,6 @@ def kling_wait_for_video(request_id, poll_interval=5, timeout=900):
         FAL_KLING_MODEL, request_id, poll_interval, timeout,
         "Kling video generation",
     )
-
-
-# ---------------------------------------------------------------------------
-# Grok Imagine — Image-to-video animation (fallback provider, via xAI API)
-# ---------------------------------------------------------------------------
-
-def grok_image_to_video(image_path, prompt, duration=5, aspect_ratio="9:16", resolution="720p"):
-    """Animate a keyframe via Grok Imagine image-to-video.
-
-    Uses xAI's async video generation API. The image should already be styled
-    (anime keyframe or Pixar render) — Grok only adds motion.
-
-    Args:
-        image_path: Path to the styled keyframe image
-        prompt: Motion-only prompt (what should MOVE, not what the image contains)
-        duration: Clip duration in seconds, 1-15 (default 5)
-        aspect_ratio: Video aspect ratio (default "9:16" for vertical)
-        resolution: "480p" or "720p" (default "720p")
-
-    Returns:
-        dict with request_id for polling via grok_poll_video()
-    """
-    api_key = os.environ.get("GROK_API_KEY")
-    if not api_key:
-        raise ValueError("GROK_API_KEY not set")
-
-    img_b64 = _load_image_b64(image_path)
-    image_uri = f"data:image/jpeg;base64,{img_b64}"
-
-    def _call():
-        resp = requests.post(
-            "https://api.x.ai/v1/videos/generations",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": "grok-imagine-video",
-                "prompt": prompt,
-                "image": image_uri,
-                "duration": duration,
-                "aspect_ratio": aspect_ratio,
-                "resolution": resolution,
-            },
-        )
-        resp.raise_for_status()
-        return resp.json()
-
-    return _retry(_call)
-
-
-def grok_poll_video(request_id):
-    """Poll for video generation completion.
-
-    Grok video generation is async. Poll until status is "done", "failed",
-    or "expired".
-
-    Returns:
-        dict with status, and video.url when status is "done"
-    """
-    api_key = os.environ.get("GROK_API_KEY")
-    if not api_key:
-        raise ValueError("GROK_API_KEY not set")
-
-    resp = requests.get(
-        f"https://api.x.ai/v1/videos/{request_id}",
-        headers={"Authorization": f"Bearer {api_key}"},
-    )
-    resp.raise_for_status()
-    return resp.json()
-
-
-def grok_wait_for_video(request_id, poll_interval=5, timeout=600):
-    """Submit and wait for video generation to complete.
-
-    Polls grok_poll_video() until the video is ready, failed, or timed out.
-
-    Returns:
-        dict with video URL on success, raises on failure/timeout
-    """
-    import time as _time
-    start = _time.time()
-    while _time.time() - start < timeout:
-        result = grok_poll_video(request_id)
-        status = result.get("status")
-        if status == "done":
-            return result
-        if status in ("failed", "expired"):
-            raise RuntimeError(f"Grok video generation {status}: {result}")
-        _time.sleep(poll_interval)
-    raise TimeoutError(f"Grok video generation timed out after {timeout}s")
 
 
 # ---------------------------------------------------------------------------
@@ -399,16 +292,6 @@ def music_generate(prompt, instrumental=True):
         return resp.json()
 
     return _retry(_call)
-
-
-def music_poll(request_id):
-    """Poll fal.ai queue for music generation status."""
-    return _fal_queue_poll(FAL_MINIMAX_MODEL, request_id)
-
-
-def music_get_result(request_id):
-    """Fetch the completed audio result from fal.ai."""
-    return _fal_queue_get_result(FAL_MINIMAX_MODEL, request_id)
 
 
 def music_wait_for_result(request_id, poll_interval=5, timeout=300):

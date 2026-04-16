@@ -129,8 +129,6 @@ def _stage_1_script(project_id: str, stage_id: str) -> list[dict]:
 
 def _stage_2_characters(project_id: str, stage_id: str) -> list[dict]:
     """Character Designer: Generate character sheets from uploaded photos."""
-    import os
-    from pathlib import Path
     from pipeline.tools import gpt4o_master_character_sheet, neolemon_generate
 
     uploads = get_uploads(project_id)
@@ -164,8 +162,6 @@ def _stage_2_characters(project_id: str, stage_id: str) -> list[dict]:
 
 def _stage_3_scenes(project_id: str, stage_id: str) -> list[dict]:
     """Scene Composer: Generate keyframes for each scene."""
-    import os, json
-    from pathlib import Path
     from pipeline.tools import gpt4o_scene_with_ref, neolemon_generate
 
     scene_dir = _project_subdir(project_id, "scenes")
@@ -214,8 +210,6 @@ def _stage_3_scenes(project_id: str, stage_id: str) -> list[dict]:
 
 def _stage_4_animation(project_id: str, stage_id: str) -> list[dict]:
     """Animator: Convert keyframes to animated clips via Kling on fal.ai."""
-    import os, json
-    from pathlib import Path
     from pipeline.tools import kling_image_to_video, kling_wait_for_video
 
     clip_dir = _project_subdir(project_id, "clips")
@@ -328,8 +322,7 @@ def _stage_5_audio(project_id: str, stage_id: str) -> list[dict]:
 
 def _stage_6_assembly(project_id: str, stage_id: str) -> list[dict]:
     """Assembly Editor: Stitch all clips + audio into final video."""
-    import os, subprocess, json
-    from pathlib import Path
+    import subprocess
 
     assembly_dir = _project_subdir(project_id, "assembly")
 

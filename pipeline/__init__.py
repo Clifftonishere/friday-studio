@@ -1,1 +1,1 @@
-"""Friday Studio — AnimateMe Production Pipeline"""
+"""Friday Studio — Pipeline tools and prompts."""

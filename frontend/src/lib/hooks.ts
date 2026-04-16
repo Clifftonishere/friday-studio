@@ -3,12 +3,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { getProject, API_URL } from "./api";
 
-export interface SSEEvent {
+interface SSEEvent {
   type: string;
   data: Record<string, unknown>;
 }
 
-export function useProjectEvents(projectId: string | null) {
+function useProjectEvents(projectId: string | null) {
   const [lastEvent, setLastEvent] = useState<SSEEvent | null>(null);
 
   useEffect(() => {

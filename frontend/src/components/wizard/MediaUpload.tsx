@@ -7,14 +7,7 @@ import {
   bulkUpdateStyle,
   deleteUpload,
 } from "@/lib/api";
-
-interface Upload {
-  id: string;
-  filename: string;
-  media_type: string;
-  style: string;
-  url?: string;
-}
+import type { Upload, StyleType } from "@/lib/types";
 
 interface Props {
   projectId: string;
@@ -32,24 +25,20 @@ export default function MediaUpload({ projectId, onContinue }: Props) {
   const handleFiles = async (files: FileList) => {
     setUploading(true);
     for (const file of Array.from(files)) {
-      try {
-        const result = await uploadMedia(projectId, file, globalStyle);
-        setUploads((prev) => [...prev, result]);
-      } catch (err) {
-        console.error("Upload failed:", err);
-      }
+      const result = await uploadMedia(projectId, file, globalStyle);
+      setUploads((prev) => [...prev, result]);
     }
     setUploading(false);
   };
 
-  const handleStyleChange = async (uploadId: string, style: string) => {
+  const handleStyleChange = async (uploadId: string, style: StyleType) => {
     await updateUploadStyle(projectId, uploadId, style);
     setUploads((prev) =>
       prev.map((u) => (u.id === uploadId ? { ...u, style } : u))
     );
   };
 
-  const handleBulkStyle = async (style: string) => {
+  const handleBulkStyle = async (style: StyleType) => {
     setGlobalStyle(style);
     await bulkUpdateStyle(projectId, style);
     setUploads((prev) => prev.map((u) => ({ ...u, style })));
@@ -63,8 +52,8 @@ export default function MediaUpload({ projectId, onContinue }: Props) {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold mb-2">Upload your media</h2>
-        <p className="text-white/50">
+        <h2 className="text-2xl font-bold text-[#1a1a1a] mb-2">Upload your media</h2>
+        <p className="text-[#8C7E6F]">
           Add photos and videos. Choose a style for each — or apply one style to
           all.
         </p>
@@ -72,15 +61,15 @@ export default function MediaUpload({ projectId, onContinue }: Props) {
 
       {/* Global style selector */}
       <div className="flex items-center gap-3">
-        <span className="text-sm text-white/50">Apply to all:</span>
+        <span className="text-sm text-[#8C7E6F]">Apply to all:</span>
         {STYLES.map((s) => (
           <button
             key={s}
             onClick={() => handleBulkStyle(s)}
             className={`px-3 py-1.5 rounded-lg text-sm capitalize transition ${
               globalStyle === s
-                ? "bg-white text-black"
-                : "bg-white/5 border border-white/10 hover:border-white/20"
+                ? "bg-[#6B5B4E] text-white"
+                : "bg-white border border-[#E8E0D6] text-[#1a1a1a] hover:border-[#D4C9BC]"
             }`}
           >
             {s}
@@ -96,12 +85,12 @@ export default function MediaUpload({ projectId, onContinue }: Props) {
           e.preventDefault();
           if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
         }}
-        className="border-2 border-dashed border-white/10 rounded-xl p-10 text-center cursor-pointer hover:border-white/20 transition"
+        className="border-2 border-dashed border-[#D4C9BC] rounded-xl p-10 text-center cursor-pointer hover:border-[#6B5B4E] hover:bg-white transition"
       >
-        <p className="text-white/40 mb-1">
+        <p className="text-[#8C7E6F] mb-1">
           {uploading ? "Uploading..." : "Drop files here or click to browse"}
         </p>
-        <p className="text-xs text-white/20">
+        <p className="text-xs text-[#B0A396]">
           JPG, PNG, WEBP, MP4, MOV supported
         </p>
         <input
@@ -120,25 +109,25 @@ export default function MediaUpload({ projectId, onContinue }: Props) {
           {uploads.map((u) => (
             <div
               key={u.id}
-              className="flex items-center justify-between p-3 rounded-lg bg-white/5 border border-white/10"
+              className="flex items-center justify-between p-3 rounded-lg bg-white border border-[#E8E0D6]"
             >
               <div className="flex items-center gap-3 min-w-0">
                 <span
                   className={`text-xs px-2 py-0.5 rounded ${
                     u.media_type === "photo"
-                      ? "bg-blue-500/20 text-blue-400"
-                      : "bg-purple-500/20 text-purple-400"
+                      ? "bg-blue-100 text-blue-700"
+                      : "bg-purple-100 text-purple-700"
                   }`}
                 >
                   {u.media_type}
                 </span>
-                <span className="text-sm truncate">{u.filename}</span>
+                <span className="text-sm truncate text-[#1a1a1a]">{u.filename}</span>
               </div>
               <div className="flex items-center gap-2">
                 <select
                   value={u.style}
-                  onChange={(e) => handleStyleChange(u.id, e.target.value)}
-                  className="bg-white/5 border border-white/10 rounded px-2 py-1 text-sm"
+                  onChange={(e) => handleStyleChange(u.id, e.target.value as StyleType)}
+                  className="bg-white border border-[#E8E0D6] rounded px-2 py-1 text-sm text-[#1a1a1a]"
                 >
                   {STYLES.map((s) => (
                     <option key={s} value={s}>
@@ -148,7 +137,7 @@ export default function MediaUpload({ projectId, onContinue }: Props) {
                 </select>
                 <button
                   onClick={() => handleDelete(u.id)}
-                  className="text-white/30 hover:text-red-400 transition text-sm"
+                  className="text-[#B0A396] hover:text-red-500 transition text-sm"
                 >
                   Remove
                 </button>
@@ -161,7 +150,7 @@ export default function MediaUpload({ projectId, onContinue }: Props) {
       <button
         onClick={onContinue}
         disabled={uploads.length === 0}
-        className="px-6 py-3 bg-white text-black rounded-lg font-medium hover:bg-white/90 transition disabled:opacity-30 disabled:cursor-not-allowed"
+        className="px-6 py-3 bg-[#6B5B4E] text-white rounded-lg font-medium hover:bg-[#5A4A3E] transition disabled:opacity-30 disabled:cursor-not-allowed"
       >
         Continue
       </button>

@@ -1,10 +1,82 @@
-"""Friday Studio — SQLite database layer."""
+"""SQLite database layer."""
+
+from __future__ import annotations
 
 import sqlite3
 import uuid
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, TypedDict
+
+
+# ---------------------------------------------------------------------------
+# TypedDicts — mirror the sqlite3.Row shapes returned by queries
+# ---------------------------------------------------------------------------
+
+class ProjectDict(TypedDict):
+    id: str
+    title: str
+    brief: str
+    status: str
+    current_stage: int
+    created_at: str
+    updated_at: str
+
+
+class ProjectDetailDict(ProjectDict):
+    uploads: list[UploadDict]
+    stages: list[StageDict]
+    soundtrack: SoundtrackConfigDict | None
+
+
+class UploadDict(TypedDict):
+    id: str
+    project_id: str
+    filename: str
+    file_path: str
+    media_type: str
+    style: str
+    sort_order: int
+    created_at: str
+
+
+class StageDict(TypedDict):
+    id: str
+    project_id: str
+    stage_number: int
+    stage_name: str
+    status: str
+    started_at: str | None
+    completed_at: str | None
+    error_message: str | None
+
+
+class AssetDict(TypedDict):
+    id: str
+    project_id: str
+    stage_id: str
+    asset_type: str
+    file_path: str | None
+    text_content: str | None
+    metadata: str | None
+    version: int
+    status: str
+    created_at: str
+
+
+class FeedbackDict(TypedDict):
+    id: str
+    asset_id: str
+    action: str
+    comment: str | None
+    created_at: str
+
+
+class SoundtrackConfigDict(TypedDict):
+    project_id: str
+    mode: str
+    uploaded_path: str | None
 
 DB_PATH = "/data/friday.db"
 
@@ -25,8 +97,7 @@ def get_db() -> sqlite3.Connection:
     return conn
 
 
-def init_db():
-    """Create tables if they don't exist."""
+def init_db() -> None:
     Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
     conn = get_db()
     conn.executescript("""
@@ -108,7 +179,7 @@ STAGE_NAMES = {
 # Projects
 # ---------------------------------------------------------------------------
 
-def create_project(title: str, brief: str) -> dict:
+def create_project(title: str, brief: str) -> ProjectDict:
     conn = get_db()
     project_id = _uuid()
     now = _now()
@@ -122,14 +193,14 @@ def create_project(title: str, brief: str) -> dict:
     return dict(row)
 
 
-def list_projects() -> list[dict]:
+def list_projects() -> list[ProjectDict]:
     conn = get_db()
     rows = conn.execute("SELECT * FROM projects ORDER BY created_at DESC").fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
 
-def get_project(project_id: str) -> dict | None:
+def get_project(project_id: str) -> ProjectDetailDict | None:
     conn = get_db()
     row = conn.execute("SELECT * FROM projects WHERE id=?", (project_id,)).fetchone()
     if not row:
@@ -146,7 +217,7 @@ def get_project(project_id: str) -> dict | None:
     return project
 
 
-def update_project(project_id: str, **kwargs):
+def update_project(project_id: str, **kwargs: Any) -> None:
     conn = get_db()
     kwargs["updated_at"] = _now()
     sets = ", ".join(f"{k}=?" for k in kwargs)
@@ -160,7 +231,7 @@ def update_project(project_id: str, **kwargs):
 # Uploads
 # ---------------------------------------------------------------------------
 
-def create_upload(project_id: str, filename: str, file_path: str, media_type: str, style: str = "original") -> dict:
+def create_upload(project_id: str, filename: str, file_path: str, media_type: str, style: str = "original") -> UploadDict:
     conn = get_db()
     upload_id = _uuid()
     max_order = conn.execute("SELECT COALESCE(MAX(sort_order),0) FROM uploads WHERE project_id=?", (project_id,)).fetchone()[0]
@@ -174,28 +245,28 @@ def create_upload(project_id: str, filename: str, file_path: str, media_type: st
     return dict(row)
 
 
-def update_upload_style(upload_id: str, style: str):
+def update_upload_style(upload_id: str, style: str) -> None:
     conn = get_db()
     conn.execute("UPDATE uploads SET style=? WHERE id=?", (style, upload_id))
     conn.commit()
     conn.close()
 
 
-def bulk_update_upload_style(project_id: str, style: str):
+def bulk_update_upload_style(project_id: str, style: str) -> None:
     conn = get_db()
     conn.execute("UPDATE uploads SET style=? WHERE project_id=?", (style, project_id))
     conn.commit()
     conn.close()
 
 
-def delete_upload(upload_id: str):
+def delete_upload(upload_id: str) -> None:
     conn = get_db()
     conn.execute("DELETE FROM uploads WHERE id=?", (upload_id,))
     conn.commit()
     conn.close()
 
 
-def get_uploads(project_id: str, media_type: str | None = None) -> list[dict]:
+def get_uploads(project_id: str, media_type: str | None = None) -> list[UploadDict]:
     conn = get_db()
     if media_type:
         rows = conn.execute("SELECT * FROM uploads WHERE project_id=? AND media_type=? ORDER BY sort_order", (project_id, media_type)).fetchall()
@@ -209,7 +280,7 @@ def get_uploads(project_id: str, media_type: str | None = None) -> list[dict]:
 # Stages
 # ---------------------------------------------------------------------------
 
-def create_stages(project_id: str) -> list[dict]:
+def create_stages(project_id: str) -> list[StageDict]:
     conn = get_db()
     stages = []
     for num, name in STAGE_NAMES.items():
@@ -224,14 +295,14 @@ def create_stages(project_id: str) -> list[dict]:
     return stages
 
 
-def get_stage(project_id: str, stage_number: int) -> dict | None:
+def get_stage(project_id: str, stage_number: int) -> StageDict | None:
     conn = get_db()
     row = conn.execute("SELECT * FROM stages WHERE project_id=? AND stage_number=?", (project_id, stage_number)).fetchone()
     conn.close()
     return dict(row) if row else None
 
 
-def update_stage(stage_id: str, **kwargs):
+def update_stage(stage_id: str, **kwargs: Any) -> None:
     conn = get_db()
     sets = ", ".join(f"{k}=?" for k in kwargs)
     vals = list(kwargs.values()) + [stage_id]
@@ -244,7 +315,7 @@ def update_stage(stage_id: str, **kwargs):
 # Assets
 # ---------------------------------------------------------------------------
 
-def create_asset(project_id: str, stage_id: str, asset_type: str, file_path: str | None = None, text_content: str | None = None, metadata: dict | None = None) -> dict:
+def create_asset(project_id: str, stage_id: str, asset_type: str, file_path: str | None = None, text_content: str | None = None, metadata: dict[str, Any] | None = None) -> AssetDict:
     conn = get_db()
     asset_id = _uuid()
     meta_json = json.dumps(metadata) if metadata else None
@@ -258,10 +329,10 @@ def create_asset(project_id: str, stage_id: str, asset_type: str, file_path: str
     return dict(row)
 
 
-def get_assets(project_id: str, stage_number: int | None = None, asset_type: str | None = None, status: str | None = None) -> list[dict]:
+def get_assets(project_id: str, stage_number: int | None = None, asset_type: str | None = None, status: str | None = None) -> list[AssetDict]:
     conn = get_db()
     query = "SELECT a.* FROM assets a JOIN stages s ON a.stage_id = s.id WHERE a.project_id=?"
-    params: list = [project_id]
+    params: list[Any] = [project_id]
     if stage_number is not None:
         query += " AND s.stage_number=?"
         params.append(stage_number)
@@ -277,14 +348,14 @@ def get_assets(project_id: str, stage_number: int | None = None, asset_type: str
     return [dict(r) for r in rows]
 
 
-def get_asset(asset_id: str) -> dict | None:
+def get_asset(asset_id: str) -> AssetDict | None:
     conn = get_db()
     row = conn.execute("SELECT * FROM assets WHERE id=?", (asset_id,)).fetchone()
     conn.close()
     return dict(row) if row else None
 
 
-def update_asset(asset_id: str, **kwargs):
+def update_asset(asset_id: str, **kwargs: Any) -> None:
     conn = get_db()
     sets = ", ".join(f"{k}=?" for k in kwargs)
     vals = list(kwargs.values()) + [asset_id]
@@ -293,7 +364,7 @@ def update_asset(asset_id: str, **kwargs):
     conn.close()
 
 
-def get_latest_asset_version(project_id: str, stage_id: str, asset_type: str, metadata_match: dict | None = None) -> int:
+def get_latest_asset_version(project_id: str, stage_id: str, asset_type: str, metadata_match: dict[str, Any] | None = None) -> int:
     conn = get_db()
     row = conn.execute(
         "SELECT COALESCE(MAX(version),0) FROM assets WHERE project_id=? AND stage_id=? AND asset_type=?",
@@ -307,7 +378,7 @@ def get_latest_asset_version(project_id: str, stage_id: str, asset_type: str, me
 # Feedback
 # ---------------------------------------------------------------------------
 
-def create_feedback(asset_id: str, action: str, comment: str | None = None) -> dict:
+def create_feedback(asset_id: str, action: str, comment: str | None = None) -> FeedbackDict:
     conn = get_db()
     fb_id = _uuid()
     conn.execute(
@@ -324,7 +395,7 @@ def create_feedback(asset_id: str, action: str, comment: str | None = None) -> d
 # Soundtrack Config
 # ---------------------------------------------------------------------------
 
-def set_soundtrack_config(project_id: str, mode: str, uploaded_path: str | None = None):
+def set_soundtrack_config(project_id: str, mode: str, uploaded_path: str | None = None) -> None:
     conn = get_db()
     conn.execute(
         "INSERT OR REPLACE INTO soundtrack_config (project_id, mode, uploaded_path) VALUES (?,?,?)",
@@ -334,7 +405,7 @@ def set_soundtrack_config(project_id: str, mode: str, uploaded_path: str | None 
     conn.close()
 
 
-def get_soundtrack_config(project_id: str) -> dict | None:
+def get_soundtrack_config(project_id: str) -> SoundtrackConfigDict | None:
     conn = get_db()
     row = conn.execute("SELECT * FROM soundtrack_config WHERE project_id=?", (project_id,)).fetchone()
     conn.close()
@@ -346,7 +417,6 @@ def get_soundtrack_config(project_id: str) -> dict | None:
 # ---------------------------------------------------------------------------
 
 def check_stage_all_approved(project_id: str, stage_number: int) -> bool:
-    """Check if all assets in a stage are approved."""
     conn = get_db()
     stage = conn.execute("SELECT id FROM stages WHERE project_id=? AND stage_number=?", (project_id, stage_number)).fetchone()
     if not stage:

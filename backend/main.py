@@ -1,4 +1,4 @@
-"""Friday Studio — FastAPI application."""
+"""FastAPI application entry point."""
 
 import os
 from contextlib import asynccontextmanager
@@ -37,7 +37,12 @@ app.include_router(pipeline.router, prefix="/api")
 app.include_router(feedback.router, prefix="/api")
 app.include_router(sse.router, prefix="/api")
 
-# Serve generated project files
+# Serve generated assets at /files/{project_id}/...
 projects_dir = Path(f"{DATA_DIR}/projects")
 projects_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/files", StaticFiles(directory=str(projects_dir)), name="project_files")
+
+# Serve the Next.js static frontend at /
+FRONTEND_DIR = os.environ.get("FRIDAY_FRONTEND_DIR", "/srv/frontend")
+if Path(FRONTEND_DIR).is_dir():
+    app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")

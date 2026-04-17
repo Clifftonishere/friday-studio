@@ -1,16 +1,10 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { getProject } from "./api";
+import { getProject, API_URL } from "./api";
+import type { Project, SSEEvent, SSEEventData } from "./types";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-
-export interface SSEEvent {
-  type: string;
-  data: Record<string, unknown>;
-}
-
-export function useProjectEvents(projectId: string | null) {
+function useProjectEvents(projectId: string | null): SSEEvent | null {
   const [lastEvent, setLastEvent] = useState<SSEEvent | null>(null);
 
   useEffect(() => {
@@ -18,14 +12,12 @@ export function useProjectEvents(projectId: string | null) {
 
     const source = new EventSource(`${API_URL}/api/projects/${projectId}/events`);
 
-    const handleEvent = (type: string) => (e: MessageEvent) => {
-      try {
-        const data = JSON.parse(e.data);
-        setLastEvent({ type, data });
-      } catch {}
+    const handleEvent = (type: SSEEvent["type"]) => (e: MessageEvent) => {
+      const data: SSEEventData = JSON.parse(e.data);
+      setLastEvent({ type, data });
     };
 
-    const eventTypes = [
+    const eventTypes: SSEEvent["type"][] = [
       "stage_started",
       "asset_generated",
       "stage_complete",
@@ -41,20 +33,15 @@ export function useProjectEvents(projectId: string | null) {
 }
 
 export function useProject(projectId: string | null) {
-  const [project, setProject] = useState<Record<string, unknown> | null>(null);
+  const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
   const lastEvent = useProjectEvents(projectId);
 
   const refresh = useCallback(async () => {
     if (!projectId) return;
-    try {
-      const data = await getProject(projectId);
-      setProject(data);
-    } catch (err) {
-      console.error("Failed to fetch project:", err);
-    } finally {
-      setLoading(false);
-    }
+    const data = await getProject(projectId);
+    setProject(data);
+    setLoading(false);
   }, [projectId]);
 
   useEffect(() => {

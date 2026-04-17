@@ -1,4 +1,4 @@
-"""Friday Studio — Server-Sent Events for real-time updates."""
+"""Server-Sent Events for real-time pipeline updates."""
 
 import asyncio
 import json

@@ -1,27 +1,83 @@
-"""Friday Studio — API Tool Wrappers
+"""API tool wrappers for external generation services.
 
 Tool routing:
   - GPT-4o: Image generation only (anime style transfer). Called via OpenAI API.
   - Neolemon V3: Image generation only (Pixar style). Called via Segmind API.
-  - Kling AI: Video generation (animate keyframes, primary). Called via fal.ai proxy.
-  - Grok Imagine: Video generation (animate keyframes, fallback). Called via xAI API.
-  - Suno V5: Audio generation. Called via Suno API.
+  - Kling AI: Video generation (animate keyframes). Called via fal.ai proxy.
+  - MiniMax Music: Audio generation. Called via fal.ai proxy (same FAL_KEY).
   - All agent reasoning runs on Anthropic Claude (configured in pipeline.py).
 """
+
+from __future__ import annotations
 
 import os
 import base64
 import time
+from typing import Any, Callable, TypedDict, TypeVar
+
 import requests
 from pathlib import Path
+
+
+T = TypeVar("T")
+
+
+# ---------------------------------------------------------------------------
+# API response TypedDicts
+# ---------------------------------------------------------------------------
+
+class OpenAIImageData(TypedDict, total=False):
+    b64_json: str
+    url: str
+
+
+class OpenAIImageResponse(TypedDict):
+    data: list[OpenAIImageData]
+
+
+class ChatMessageContent(TypedDict):
+    content: str
+
+
+class ChatChoice(TypedDict):
+    message: ChatMessageContent
+
+
+class ChatCompletionResponse(TypedDict):
+    choices: list[ChatChoice]
+
+
+class FalQueueSubmitResponse(TypedDict):
+    request_id: str
+    status_url: str
+    response_url: str
+
+
+class FalQueueStatusResponse(TypedDict, total=False):
+    status: str
+    logs: list[dict[str, Any]]
+
+
+class KlingVideoResult(TypedDict, total=False):
+    video: dict[str, str]
+
+
+class MusicAudioFile(TypedDict, total=False):
+    url: str
+
+
+class MusicResult(TypedDict, total=False):
+    audio: MusicAudioFile | str
+    audio_file: MusicAudioFile
+    url: str
+    request_id: str
 
 MAX_RETRIES = 3
 RETRY_DELAY = 2
 
 
-def _retry(fn, retries=MAX_RETRIES):
-    """Retry a function with exponential backoff. Returns result or raises last error."""
-    last_err = None
+def _retry(fn: Callable[[], T], retries: int = MAX_RETRIES) -> T:
+    last_err: Exception | None = None
     for attempt in range(retries):
         try:
             result = fn()
@@ -30,11 +86,10 @@ def _retry(fn, retries=MAX_RETRIES):
             last_err = e
             if attempt < retries - 1:
                 time.sleep(RETRY_DELAY * (attempt + 1))
-    raise last_err
+    raise last_err  # type: ignore[misc]
 
 
-def _load_image_b64(image_path):
-    """Load an image file and return base64-encoded string."""
+def _load_image_b64(image_path: str) -> str:
     with open(image_path, "rb") as f:
         return base64.b64encode(f.read()).decode()
 
@@ -43,13 +98,9 @@ def _load_image_b64(image_path):
 # GPT-4o — Anime style transfer (image generation, NOT chat reasoning)
 # ---------------------------------------------------------------------------
 
-def gpt4o_master_character_sheet(image_path, style_prompt=None):
-    """Generate a master anime character sheet from a reference photo.
-
-    Uses GPT-4o's image generation with the reference photo as input.
-    Returns the API response containing the generated character sheet image.
-    """
-    from prompts import ANIME_MASTER_CHARACTER_SHEET
+def gpt4o_master_character_sheet(image_path: str, style_prompt: str | None = None) -> OpenAIImageResponse:
+    """Generate a master anime character sheet from a reference photo."""
+    from pipeline.prompts import ANIME_MASTER_CHARACTER_SHEET
 
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
@@ -76,16 +127,9 @@ def gpt4o_master_character_sheet(image_path, style_prompt=None):
     return _retry(_call)
 
 
-def gpt4o_scene_with_ref(master_ref_path, scene_photo_path, scene_description):
-    """Generate an anime scene keyframe, maintaining character consistency.
-
-    Two-image input:
-      - Image 1 (master_ref_path): The approved master character sheet
-      - Image 2 (scene_photo_path): The new scene photo to convert
-
-    Uses the ANIME_SCENE_WITH_REF prompt template to ensure character consistency.
-    """
-    from prompts import ANIME_SCENE_WITH_REF
+def gpt4o_scene_with_ref(master_ref_path: str, scene_photo_path: str, scene_description: str) -> ChatCompletionResponse:
+    """Generate an anime scene keyframe using the master character sheet for consistency."""
+    from pipeline.prompts import ANIME_SCENE_WITH_REF
 
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
@@ -131,8 +175,7 @@ def gpt4o_scene_with_ref(master_ref_path, scene_photo_path, scene_description):
 # Neolemon V3 — Pixar/Disney 3D style (via Segmind API)
 # ---------------------------------------------------------------------------
 
-def neolemon_generate(prompt, reference_image_path=None):
-    """Generate Pixar-style image via Neolemon V3 on Segmind."""
+def neolemon_generate(prompt: str, reference_image_path: str | None = None) -> requests.Response:
     api_key = os.environ.get("SEGMIND_API_KEY")
     if not api_key:
         raise ValueError("SEGMIND_API_KEY not set")
@@ -161,8 +204,7 @@ FAL_KLING_MODEL = "fal-ai/kling-video/v2.6/pro/image-to-video"
 FAL_QUEUE_URL = "https://queue.fal.run"
 
 
-def _fal_headers():
-    """Get fal.ai auth headers."""
+def _fal_headers() -> dict[str, str]:
     fal_key = os.environ.get("FAL_KEY")
     if not fal_key:
         raise ValueError("FAL_KEY not set")
@@ -172,20 +214,40 @@ def _fal_headers():
     }
 
 
-def kling_image_to_video(image_path, prompt, duration=5, negative_prompt="blur, distort, low quality"):
-    """Animate a keyframe via Kling 2.6 Pro on fal.ai.
+def _fal_queue_poll(model: str, request_id: str) -> FalQueueStatusResponse:
+    resp = requests.get(
+        f"{FAL_QUEUE_URL}/{model}/requests/{request_id}/status",
+        headers=_fal_headers(),
+        params={"logs": "1"},
+    )
+    resp.raise_for_status()
+    return resp.json()
 
-    Submits to fal.ai's queue and returns the request_id for polling.
 
-    Args:
-        image_path: Path to the styled keyframe image
-        prompt: Motion description prompt
-        duration: 5 or 10 seconds
-        negative_prompt: What to avoid in generation
+def _fal_queue_get_result(model: str, request_id: str) -> dict[str, Any]:
+    resp = requests.get(
+        f"{FAL_QUEUE_URL}/{model}/requests/{request_id}",
+        headers=_fal_headers(),
+    )
+    resp.raise_for_status()
+    return resp.json()
 
-    Returns:
-        dict with request_id, status_url, response_url
-    """
+
+def _fal_queue_wait(model: str, request_id: str, poll_interval: int, timeout: int, label: str) -> dict[str, Any]:
+    """Poll until COMPLETED, then return the result. Raises on FAILED or timeout."""
+    start = time.time()
+    while time.time() - start < timeout:
+        status = _fal_queue_poll(model, request_id)
+        if status.get("status") == "COMPLETED":
+            return _fal_queue_get_result(model, request_id)
+        if status.get("status") == "FAILED":
+            raise RuntimeError(f"{label} failed: {status}")
+        time.sleep(poll_interval)
+    raise TimeoutError(f"{label} timed out after {timeout}s")
+
+
+def kling_image_to_video(image_path: str, prompt: str, duration: int = 5, negative_prompt: str = "blur, distort, low quality") -> FalQueueSubmitResponse:
+    """Submit a keyframe to Kling 2.6 Pro on fal.ai. Returns request_id for polling."""
     img_b64 = _load_image_b64(image_path)
     image_uri = f"data:image/png;base64,{img_b64}"
 
@@ -206,93 +268,31 @@ def kling_image_to_video(image_path, prompt, duration=5, negative_prompt="blur, 
     return _retry(_call)
 
 
-def kling_poll_video(request_id):
-    """Poll fal.ai queue for Kling video generation status.
-
-    Returns dict with status: IN_QUEUE, IN_PROGRESS, or COMPLETED.
-    """
-    resp = requests.get(
-        f"{FAL_QUEUE_URL}/{FAL_KLING_MODEL}/requests/{request_id}/status",
-        headers=_fal_headers(),
-        params={"logs": "1"},
+def kling_wait_for_video(request_id: str, poll_interval: int = 5, timeout: int = 900) -> dict[str, Any]:
+    """Poll until Kling video is ready. Timeout defaults to 15 min (typical: 5-14 min)."""
+    return _fal_queue_wait(
+        FAL_KLING_MODEL, request_id, poll_interval, timeout,
+        "Kling video generation",
     )
-    resp.raise_for_status()
-    return resp.json()
-
-
-def kling_get_result(request_id):
-    """Fetch the completed video result from fal.ai.
-
-    Returns dict with video.url on success.
-    """
-    resp = requests.get(
-        f"{FAL_QUEUE_URL}/{FAL_KLING_MODEL}/requests/{request_id}",
-        headers=_fal_headers(),
-    )
-    resp.raise_for_status()
-    return resp.json()
-
-
-def kling_wait_for_video(request_id, poll_interval=5, timeout=900):
-    """Wait for Kling video generation to complete on fal.ai.
-
-    Kling takes 5-14 minutes typically, so timeout defaults to 15 min.
-
-    Returns:
-        dict with video URL on success, raises on failure/timeout
-    """
-    start = time.time()
-    while time.time() - start < timeout:
-        status = kling_poll_video(request_id)
-        if status.get("status") == "COMPLETED":
-            return kling_get_result(request_id)
-        if status.get("status") == "FAILED":
-            raise RuntimeError(f"Kling video generation failed: {status}")
-        time.sleep(poll_interval)
-    raise TimeoutError(f"Kling video generation timed out after {timeout}s")
 
 
 # ---------------------------------------------------------------------------
-# Grok Imagine — Image-to-video animation (fallback provider, via xAI API)
+# MiniMax Music — Audio score generation via fal.ai
 # ---------------------------------------------------------------------------
 
-def grok_image_to_video(image_path, prompt, duration=5, aspect_ratio="9:16", resolution="720p"):
-    """Animate a keyframe via Grok Imagine image-to-video.
+FAL_MINIMAX_MODEL = "fal-ai/minimax-music"
 
-    Uses xAI's async video generation API. The image should already be styled
-    (anime keyframe or Pixar render) — Grok only adds motion.
 
-    Args:
-        image_path: Path to the styled keyframe image
-        prompt: Motion-only prompt (what should MOVE, not what the image contains)
-        duration: Clip duration in seconds, 1-15 (default 5)
-        aspect_ratio: Video aspect ratio (default "9:16" for vertical)
-        resolution: "480p" or "720p" (default "720p")
-
-    Returns:
-        dict with request_id for polling via grok_poll_video()
-    """
-    api_key = os.environ.get("GROK_API_KEY")
-    if not api_key:
-        raise ValueError("GROK_API_KEY not set")
-
-    img_b64 = _load_image_b64(image_path)
-    image_uri = f"data:image/jpeg;base64,{img_b64}"
+def music_generate(prompt: str, instrumental: bool = True) -> FalQueueSubmitResponse:
+    if instrumental and "instrumental" not in prompt.lower():
+        prompt = f"[Instrumental] {prompt}"
 
     def _call():
         resp = requests.post(
-            "https://api.x.ai/v1/videos/generations",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
+            f"{FAL_QUEUE_URL}/{FAL_MINIMAX_MODEL}",
+            headers=_fal_headers(),
             json={
-                "model": "grok-imagine-video",
                 "prompt": prompt,
-                "image": image_uri,
-                "duration": duration,
-                "aspect_ratio": aspect_ratio,
-                "resolution": resolution,
             },
         )
         resp.raise_for_status()
@@ -301,68 +301,8 @@ def grok_image_to_video(image_path, prompt, duration=5, aspect_ratio="9:16", res
     return _retry(_call)
 
 
-def grok_poll_video(request_id):
-    """Poll for video generation completion.
-
-    Grok video generation is async. Poll until status is "done", "failed",
-    or "expired".
-
-    Returns:
-        dict with status, and video.url when status is "done"
-    """
-    api_key = os.environ.get("GROK_API_KEY")
-    if not api_key:
-        raise ValueError("GROK_API_KEY not set")
-
-    resp = requests.get(
-        f"https://api.x.ai/v1/videos/{request_id}",
-        headers={"Authorization": f"Bearer {api_key}"},
+def music_wait_for_result(request_id: str, poll_interval: int = 5, timeout: int = 300) -> dict[str, Any]:
+    return _fal_queue_wait(
+        FAL_MINIMAX_MODEL, request_id, poll_interval, timeout,
+        "Music generation",
     )
-    resp.raise_for_status()
-    return resp.json()
-
-
-def grok_wait_for_video(request_id, poll_interval=5, timeout=600):
-    """Submit and wait for video generation to complete.
-
-    Polls grok_poll_video() until the video is ready, failed, or timed out.
-
-    Returns:
-        dict with video URL on success, raises on failure/timeout
-    """
-    import time as _time
-    start = _time.time()
-    while _time.time() - start < timeout:
-        result = grok_poll_video(request_id)
-        status = result.get("status")
-        if status == "done":
-            return result
-        if status in ("failed", "expired"):
-            raise RuntimeError(f"Grok video generation {status}: {result}")
-        _time.sleep(poll_interval)
-    raise TimeoutError(f"Grok video generation timed out after {timeout}s")
-
-
-# ---------------------------------------------------------------------------
-# Suno V5 — Audio score generation
-# ---------------------------------------------------------------------------
-
-def suno_generate(prompt, instrumental=True):
-    """Generate audio via Suno API."""
-    api_key = os.environ.get("SUNO_API_KEY")
-    if not api_key:
-        raise ValueError("SUNO_API_KEY not set")
-
-    def _call():
-        resp = requests.post(
-            "https://api.sunoapi.org/v1/generate",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-            json={"prompt": prompt, "instrumental": instrumental},
-        )
-        resp.raise_for_status()
-        return resp.json()
-
-    return _retry(_call)

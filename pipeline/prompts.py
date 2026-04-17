@@ -1,4 +1,4 @@
-"""Friday Studio — Prompt Templates"""
+"""Prompt templates for style transfer and scene generation."""
 
 ANIME_MASTER_CHARACTER_SHEET = """
 Convert this photo into anime style in the exact style of Hajime no Ippo
@@ -18,13 +18,3 @@ Style: Hajime no Ippo / Megalo Box. Cel-shaded, bold outlines. 9:16.
 Scene details: {scene_description}
 """
 
-GROK_ANIME_MOTION = """
-Animate this anime {subject_type}. {motion_description}.
-Keep the cel-shaded anime style throughout. {camera_direction}. {duration}s.
-"""
-
-SUNO_BOXING_PROMO = """
-[Instrumental] Dark trap beat with orchestral strings. Atmospheric intro
-with crowd noise. Hard 808s and brass at 0:40. Orchestral climax at 1:20.
-Piano and strings resolution. 2 minutes. No vocals. Cinematic boxing energy.
-"""

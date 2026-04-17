@@ -1,29 +1,69 @@
-"""Friday Studio — Background stage runner.
+"""Background stage runner.
 
 Dispatches pipeline stages as async tasks, updates the database,
 and pushes SSE events to connected clients.
 """
 
+from __future__ import annotations
+
 import asyncio
 import json
+import os
 from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, TypedDict
 
 from backend.database import (
     get_project, get_stage, update_stage, update_project,
     get_assets, get_uploads, get_soundtrack_config,
-    create_asset, STAGE_NAMES,
+    create_asset, STAGE_NAMES, AssetDict,
 )
 
+
+# ---------------------------------------------------------------------------
+# SSE event types pushed to the queue
+# ---------------------------------------------------------------------------
+
+class StageStartedData(TypedDict):
+    stage: int
+    name: str
+
+
+class StageCompleteData(TypedDict):
+    stage: int
+    asset_count: int
+
+
+class StageApprovedData(TypedDict):
+    stage: int
+
+
+class ErrorData(TypedDict):
+    stage: int
+    message: str
+
+
+class SSEEvent(TypedDict):
+    type: str
+    data: StageStartedData | StageCompleteData | StageApprovedData | ErrorData
+
+DATA_DIR = os.environ.get("FRIDAY_DATA_DIR", "/data")
+
 # Global event queues: one per active project
-event_queues: dict[str, asyncio.Queue] = {}
+event_queues: dict[str, asyncio.Queue[SSEEvent]] = {}
+
+
+def _project_subdir(project_id: str, subdir: str) -> Path:
+    path = Path(f"{DATA_DIR}/projects/{project_id}/{subdir}")
+    path.mkdir(parents=True, exist_ok=True)
+    return path
 
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-async def run_stage(project_id: str, stage_num: int, queue: asyncio.Queue):
-    """Run a pipeline stage in a background thread."""
+async def run_stage(project_id: str, stage_num: int, queue: asyncio.Queue[SSEEvent]) -> None:
     stage = get_stage(project_id, stage_num)
     if not stage:
         return
@@ -51,8 +91,7 @@ async def run_stage(project_id: str, stage_num: int, queue: asyncio.Queue):
         })
 
 
-def _run_stage_sync(project_id: str, stage_num: int, stage_id: str) -> list[dict]:
-    """Synchronous stage execution — runs in a thread pool."""
+def _run_stage_sync(project_id: str, stage_num: int, stage_id: str) -> list[AssetDict]:
     runners = {
         1: _stage_1_script,
         2: _stage_2_characters,
@@ -71,7 +110,7 @@ def _run_stage_sync(project_id: str, stage_num: int, stage_id: str) -> list[dict
 # Stage implementations
 # ---------------------------------------------------------------------------
 
-def _stage_1_script(project_id: str, stage_id: str) -> list[dict]:
+def _stage_1_script(project_id: str, stage_id: str) -> list[AssetDict]:
     """Script Writer: Generate scene-by-scene breakdown from brief."""
     from crewai import Agent, Task, Crew, Process
 
@@ -116,17 +155,13 @@ def _stage_1_script(project_id: str, stage_id: str) -> list[dict]:
     return [asset]
 
 
-def _stage_2_characters(project_id: str, stage_id: str) -> list[dict]:
+def _stage_2_characters(project_id: str, stage_id: str) -> list[AssetDict]:
     """Character Designer: Generate character sheets from uploaded photos."""
-    import os
-    from pathlib import Path
     from pipeline.tools import gpt4o_master_character_sheet, neolemon_generate
 
     uploads = get_uploads(project_id)
     styled_uploads = [u for u in uploads if u["style"] in ("anime", "pixar") and u["media_type"] == "photo"]
-    data_dir = os.environ.get("FRIDAY_DATA_DIR", "/data")
-    char_dir = Path(f"{data_dir}/projects/{project_id}/characters")
-    char_dir.mkdir(parents=True, exist_ok=True)
+    char_dir = _project_subdir(project_id, "characters")
 
     assets = []
     for upload in styled_uploads:
@@ -153,15 +188,11 @@ def _stage_2_characters(project_id: str, stage_id: str) -> list[dict]:
     return assets
 
 
-def _stage_3_scenes(project_id: str, stage_id: str) -> list[dict]:
+def _stage_3_scenes(project_id: str, stage_id: str) -> list[AssetDict]:
     """Scene Composer: Generate keyframes for each scene."""
-    import os, json
-    from pathlib import Path
     from pipeline.tools import gpt4o_scene_with_ref, neolemon_generate
 
-    data_dir = os.environ.get("FRIDAY_DATA_DIR", "/data")
-    scene_dir = Path(f"{data_dir}/projects/{project_id}/scenes")
-    scene_dir.mkdir(parents=True, exist_ok=True)
+    scene_dir = _project_subdir(project_id, "scenes")
 
     script_assets = get_assets(project_id, stage_number=1, asset_type="script", status="approved")
     if not script_assets:
@@ -205,15 +236,11 @@ def _stage_3_scenes(project_id: str, stage_id: str) -> list[dict]:
     return assets
 
 
-def _stage_4_animation(project_id: str, stage_id: str) -> list[dict]:
+def _stage_4_animation(project_id: str, stage_id: str) -> list[AssetDict]:
     """Animator: Convert keyframes to animated clips via Kling on fal.ai."""
-    import os, json
-    from pathlib import Path
     from pipeline.tools import kling_image_to_video, kling_wait_for_video
 
-    data_dir = os.environ.get("FRIDAY_DATA_DIR", "/data")
-    clip_dir = Path(f"{data_dir}/projects/{project_id}/clips")
-    clip_dir.mkdir(parents=True, exist_ok=True)
+    clip_dir = _project_subdir(project_id, "clips")
 
     keyframes = get_assets(project_id, stage_number=3, asset_type="keyframe", status="approved")
     if not keyframes:
@@ -248,8 +275,8 @@ def _stage_4_animation(project_id: str, stage_id: str) -> list[dict]:
     return assets
 
 
-def _stage_5_audio(project_id: str, stage_id: str) -> list[dict]:
-    """Audio Producer: Generate soundtrack via Suno or use uploaded audio."""
+def _stage_5_audio(project_id: str, stage_id: str) -> list[AssetDict]:
+    """Audio Producer: Generate soundtrack via MiniMax Music or use uploaded audio."""
     config = get_soundtrack_config(project_id)
 
     if config and config["mode"] == "upload" and config.get("uploaded_path"):
@@ -261,7 +288,7 @@ def _stage_5_audio(project_id: str, stage_id: str) -> list[dict]:
         return [asset]
 
     from crewai import Agent, Task, Crew, Process
-    from pipeline.tools import suno_generate
+    from pipeline.tools import music_generate, music_wait_for_result
 
     project = get_project(project_id)
     script = get_assets(project_id, stage_number=1, asset_type="script", status="approved")
@@ -270,56 +297,62 @@ def _stage_5_audio(project_id: str, stage_id: str) -> list[dict]:
     agent = Agent(
         role="Audio Producer",
         goal="Generate an instrumental score prompt matching the video emotional arc",
-        backstory="Music supervisor. Writes Suno V5 prompts with structure tags matching the video pacing.",
+        backstory="Music supervisor. Writes text prompts describing instrumental music — genre, mood, tempo, instruments, and structure.",
         llm="anthropic/claude-sonnet-4-5",
         verbose=True, allow_delegation=False,
     )
     task = Task(
         description=(
-            f"Write a Suno V5 prompt for an instrumental soundtrack for this project:\n\n"
+            f"Write a music generation prompt for an instrumental soundtrack for this project:\n\n"
             f"Brief: {project['brief']}\n"
             f"Script: {script_text[:500]}\n\n"
-            f"The prompt should include: genre, mood, tempo, structure tags with timestamps, "
-            f"and be 60-120 seconds long. Output ONLY the Suno prompt text."
+            f"The prompt should describe: genre, mood, tempo, instruments, emotional arc, "
+            f"and be suitable for a 60-second instrumental track. "
+            f"Output ONLY the music prompt text, no explanation."
         ),
-        expected_output="Suno V5 prompt string",
+        expected_output="Music generation prompt string",
         agent=agent,
     )
     crew = Crew(agents=[agent], tasks=[task], process=Process.sequential, verbose=True)
-    suno_prompt = str(crew.kickoff())
+    music_prompt = str(crew.kickoff())
 
-    suno_result = suno_generate(suno_prompt, instrumental=True)
-    # Save audio file if URL is returned
-    import os
-    from pathlib import Path
-    data_dir = os.environ.get("FRIDAY_DATA_DIR", "/data")
-    audio_dir = Path(f"{data_dir}/projects/{project_id}/audio")
-    audio_dir.mkdir(parents=True, exist_ok=True)
+    music_result = music_generate(music_prompt, instrumental=True)
+
+    audio_dir = _project_subdir(project_id, "audio")
     out_path = str(audio_dir / "soundtrack_v1.mp3")
 
+    # fal.ai queue: if we got a request_id, poll for completion
+    request_id = music_result.get("request_id")
+    if request_id:
+        music_result = music_wait_for_result(request_id)
+
+    # Extract audio URL from result
     audio_url = None
-    if isinstance(suno_result, dict):
-        audio_url = suno_result.get("audio_url") or suno_result.get("url")
+    if isinstance(music_result, dict):
+        audio = music_result.get("audio") or music_result.get("audio_file") or {}
+        if isinstance(audio, dict):
+            audio_url = audio.get("url")
+        elif isinstance(audio, str):
+            audio_url = audio
+        if not audio_url:
+            audio_url = music_result.get("url")
     if audio_url:
         _download_file(audio_url, out_path)
 
     asset = create_asset(
         project_id, stage_id, "audio",
         file_path=out_path,
-        text_content=suno_prompt,
-        metadata={"source": "suno_v5"},
+        text_content=music_prompt,
+        metadata={"source": "minimax_music"},
     )
     return [asset]
 
 
-def _stage_6_assembly(project_id: str, stage_id: str) -> list[dict]:
+def _stage_6_assembly(project_id: str, stage_id: str) -> list[AssetDict]:
     """Assembly Editor: Stitch all clips + audio into final video."""
-    import os, subprocess, json
-    from pathlib import Path
+    import subprocess
 
-    data_dir = os.environ.get("FRIDAY_DATA_DIR", "/data")
-    assembly_dir = Path(f"{data_dir}/projects/{project_id}/assembly")
-    assembly_dir.mkdir(parents=True, exist_ok=True)
+    assembly_dir = _project_subdir(project_id, "assembly")
 
     clips = get_assets(project_id, stage_number=4, asset_type="clip", status="approved")
     audio_assets = get_assets(project_id, stage_number=5, asset_type="audio", status="approved")
@@ -359,8 +392,7 @@ def _stage_6_assembly(project_id: str, stage_id: str) -> list[dict]:
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _save_openai_image(api_result: dict, out_path: str):
-    """Save image from OpenAI image generation response."""
+def _save_openai_image(api_result: dict[str, Any], out_path: str) -> None:
     import base64
     data = api_result.get("data", [{}])[0]
     if "b64_json" in data:
@@ -370,28 +402,23 @@ def _save_openai_image(api_result: dict, out_path: str):
         _download_file(data["url"], out_path)
 
 
-def _save_response_image(response, out_path: str):
-    """Save image from a requests.Response (Segmind etc)."""
+def _save_response_image(response: Any, out_path: str) -> None:
     if hasattr(response, "content"):
         with open(out_path, "wb") as f:
             f.write(response.content)
 
 
-def _save_chat_response_image(api_result: dict, out_path: str):
-    """Save image URL from GPT-4o chat completion vision response."""
-    try:
-        content = api_result["choices"][0]["message"]["content"]
-        if "http" in content:
-            import re
-            urls = re.findall(r'https?://\S+', content)
-            if urls:
-                _download_file(urls[0], out_path)
-    except (KeyError, IndexError):
-        pass
+def _save_chat_response_image(api_result: dict[str, Any], out_path: str) -> None:
+    """Extract and download the first URL from a GPT-4o chat vision response."""
+    content = api_result["choices"][0]["message"]["content"]
+    if "http" in content:
+        import re
+        urls = re.findall(r'https?://\S+', content)
+        if urls:
+            _download_file(urls[0], out_path)
 
 
-def _download_file(url: str, out_path: str):
-    """Download a file from a URL."""
+def _download_file(url: str, out_path: str) -> None:
     import requests
     resp = requests.get(url, timeout=120)
     resp.raise_for_status()

@@ -132,15 +132,16 @@ def _stage_1_script(project_id: str, stage_id: str) -> list[AssetDict]:
             f"Create a scene-by-scene script from this brief:\n\n"
             f"{project['brief']}\n\n"
             f"Available media: {photo_count} photos, {video_count} videos\n"
-            f"Styles requested: {', '.join(styles)}\n\n"
-            f"Output a JSON array of scenes. Each scene should have:\n"
+            f"Style: {', '.join(styles)} (the visual treatment is decided per-project, "
+            f"not per-scene; do not include a 'style' field in the output)\n\n"
+            f"Output a JSON array of scenes. Each scene must have these fields only:\n"
             f"- scene_number (int)\n"
-            f"- description (str): what happens in this scene\n"
+            f"- description (str): what happens visually in this scene\n"
             f"- duration_seconds (int): 3-8 seconds per scene\n"
             f"- camera (str): camera angle/movement\n"
-            f"- emotion (str): emotional tone\n"
-            f"- style (str): anime, pixar, or original\n\n"
-            f"Aim for 8-15 scenes totaling 60-120 seconds."
+            f"- emotion (str): emotional tone\n\n"
+            f"Aim for 8-15 scenes totaling 60-120 seconds. "
+            f"Output the JSON array directly, no markdown fences, no commentary."
         ),
         expected_output="JSON array of scene objects",
         agent=agent,
@@ -188,6 +189,21 @@ def _stage_2_characters(project_id: str, stage_id: str) -> list[AssetDict]:
     return assets
 
 
+def _parse_script_json(text: str) -> list[dict]:
+    """Extract a JSON scene array from script text, tolerating markdown fences."""
+    import re
+    match = re.search(r'\[[\s\S]*\]', text)
+    if not match:
+        raise RuntimeError(f"No JSON array found in script: {text[:200]}")
+    return json.loads(match.group(0))
+
+
+def _project_style(uploads: list[UploadDict]) -> str:
+    """Derive the project's intended style from upload tags. Defaults to anime."""
+    styles = [u["style"] for u in uploads if u["style"] in ("anime", "pixar")]
+    return styles[0] if styles else "anime"
+
+
 def _stage_3_scenes(project_id: str, stage_id: str) -> list[AssetDict]:
     """Scene Composer: Generate keyframes for each scene."""
     from pipeline.tools import gpt4o_scene_with_ref, neolemon_generate
@@ -199,32 +215,38 @@ def _stage_3_scenes(project_id: str, stage_id: str) -> list[AssetDict]:
         raise RuntimeError("No approved script found")
 
     character_assets = get_assets(project_id, stage_number=2, asset_type="character_sheet", status="approved")
-    master_ref = character_assets[0]["file_path"] if character_assets else None
-
-    scenes = []
-    try:
-        scenes = json.loads(script_assets[0]["text_content"])
-    except (json.JSONDecodeError, TypeError):
-        scenes = [{"scene_number": 1, "description": script_assets[0]["text_content"], "style": "anime"}]
+    if not character_assets:
+        raise RuntimeError("No approved character sheets found")
+    master_ref = character_assets[0]["file_path"]
 
     uploads = get_uploads(project_id)
-    assets = []
+    photo_uploads = [u for u in uploads if u["media_type"] == "photo"]
+    if not photo_uploads:
+        raise RuntimeError("No photo uploads found")
 
+    scenes = _parse_script_json(script_assets[0]["text_content"])
+    project_style = _project_style(uploads)
+
+    assets = []
     for i, scene in enumerate(scenes):
         scene_num = scene.get("scene_number", i + 1)
         description = scene.get("description", "")
-        style = scene.get("style", "anime")
+        # The script writer often tags scenes "original" meaning live footage,
+        # but the user's intent for the whole project is the upload-level style.
+        style = project_style
         out_filename = f"scene_{scene_num:02d}_v1.png"
         out_path = str(scene_dir / out_filename)
+        source_upload = photo_uploads[i % len(photo_uploads)]
 
-        source_upload = uploads[i % len(uploads)] if uploads else None
-
-        if style == "anime" and master_ref and source_upload:
+        if style == "anime":
             result = gpt4o_scene_with_ref(master_ref, source_upload["file_path"], description)
-            _save_chat_response_image(result, out_path)
+            _save_openai_image(result, out_path)
         elif style == "pixar":
             result = neolemon_generate(description, master_ref)
             _save_response_image(result, out_path)
+
+        if not Path(out_path).is_file():
+            raise RuntimeError(f"Scene {scene_num} image was not written to {out_path}")
 
         asset = create_asset(
             project_id, stage_id, "keyframe",
@@ -406,16 +428,6 @@ def _save_response_image(response: Any, out_path: str) -> None:
     if hasattr(response, "content"):
         with open(out_path, "wb") as f:
             f.write(response.content)
-
-
-def _save_chat_response_image(api_result: dict[str, Any], out_path: str) -> None:
-    """Extract and download the first URL from a GPT-4o chat vision response."""
-    content = api_result["choices"][0]["message"]["content"]
-    if "http" in content:
-        import re
-        urls = re.findall(r'https?://\S+', content)
-        if urls:
-            _download_file(urls[0], out_path)
 
 
 def _download_file(url: str, out_path: str) -> None:

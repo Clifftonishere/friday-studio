@@ -35,18 +35,6 @@ class OpenAIImageResponse(TypedDict):
     data: list[OpenAIImageData]
 
 
-class ChatMessageContent(TypedDict):
-    content: str
-
-
-class ChatChoice(TypedDict):
-    message: ChatMessageContent
-
-
-class ChatCompletionResponse(TypedDict):
-    choices: list[ChatChoice]
-
-
 class FalQueueSubmitResponse(TypedDict):
     request_id: str
     status_url: str
@@ -127,8 +115,13 @@ def gpt4o_master_character_sheet(image_path: str, style_prompt: str | None = Non
     return _retry(_call)
 
 
-def gpt4o_scene_with_ref(master_ref_path: str, scene_photo_path: str, scene_description: str) -> ChatCompletionResponse:
-    """Generate an anime scene keyframe using the master character sheet for consistency."""
+def gpt4o_scene_with_ref(master_ref_path: str, scene_photo_path: str, scene_description: str) -> OpenAIImageResponse:
+    """Generate an anime scene keyframe using the master character sheet for consistency.
+
+    Uses gpt-image-1 with multi-image input: master ref provides character
+    consistency, scene photo provides composition/pose reference. The model
+    produces a new anime-styled image combining both.
+    """
     from pipeline.prompts import ANIME_SCENE_WITH_REF
 
     api_key = os.environ.get("OPENAI_API_KEY")
@@ -138,33 +131,23 @@ def gpt4o_scene_with_ref(master_ref_path: str, scene_photo_path: str, scene_desc
     prompt = ANIME_SCENE_WITH_REF.format(scene_description=scene_description).strip()
 
     def _call():
-        resp = requests.post(
-            "https://api.openai.com/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": "gpt-4o",
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "image_url",
-                                "image_url": {"url": f"data:image/jpeg;base64,{_load_image_b64(master_ref_path)}"},
-                            },
-                            {
-                                "type": "image_url",
-                                "image_url": {"url": f"data:image/jpeg;base64,{_load_image_b64(scene_photo_path)}"},
-                            },
-                            {"type": "text", "text": prompt},
-                        ],
-                    }
-                ],
-                "max_tokens": 4096,
-            },
-        )
+        with open(master_ref_path, "rb") as ref_f, open(scene_photo_path, "rb") as scene_f:
+            files = [
+                ("image[]", (Path(master_ref_path).name, ref_f, "image/png")),
+                ("image[]", (Path(scene_photo_path).name, scene_f, "image/png")),
+            ]
+            resp = requests.post(
+                "https://api.openai.com/v1/images/edits",
+                headers={"Authorization": f"Bearer {api_key}"},
+                files=files,
+                data={
+                    "model": "gpt-image-1",
+                    "prompt": prompt,
+                    "size": "1024x1536",
+                    "quality": "high",
+                },
+                timeout=300,
+            )
         resp.raise_for_status()
         return resp.json()
 

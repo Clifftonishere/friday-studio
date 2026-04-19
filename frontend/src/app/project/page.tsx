@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useProject } from "@/lib/hooks";
 import { getStageAssets, approveAllStage } from "@/lib/api";
@@ -21,13 +21,17 @@ function ProjectDashboardInner() {
     (s) => s.stage_number === activeStage
   );
 
-  useEffect(() => {
+  const refreshAssets = useCallback(() => {
     if (!id) return;
     setLoadingAssets(true);
     getStageAssets(id, activeStage)
       .then(setAssets)
       .finally(() => setLoadingAssets(false));
-  }, [id, activeStage, lastEvent]);
+  }, [id, activeStage]);
+
+  useEffect(() => {
+    refreshAssets();
+  }, [refreshAssets, lastEvent]);
 
   useEffect(() => {
     if (project?.current_stage) {
@@ -35,9 +39,14 @@ function ProjectDashboardInner() {
     }
   }, [project?.current_stage]);
 
+  const handleAssetUpdate = useCallback(() => {
+    refresh();
+    refreshAssets();
+  }, [refresh, refreshAssets]);
+
   const handleApproveAll = async () => {
     await approveAllStage(id, activeStage);
-    refresh();
+    handleAssetUpdate();
   };
 
   const pendingCount = assets.filter(
@@ -151,7 +160,7 @@ function ProjectDashboardInner() {
           ) : (
             <div className="grid grid-cols-2 gap-4">
               {assets.map((asset) => (
-                <AssetCard key={asset.id} asset={asset} onUpdate={refresh} />
+                <AssetCard key={asset.id} asset={asset} onUpdate={handleAssetUpdate} />
               ))}
             </div>
           )}

@@ -74,7 +74,12 @@ export default function NewProjectPage() {
       {/* Step content */}
       {step === 0 && <BriefForm onSubmit={handleBriefSubmit} />}
       {step === 1 && (
-        <MediaUpload projectId={projectId} onContinue={handleMediaContinue} />
+        <MediaUpload
+          projectId={projectId}
+          uploads={uploads}
+          setUploads={setUploads}
+          onContinue={handleMediaContinue}
+        />
       )}
       {step === 2 && (
         <SoundtrackChoice

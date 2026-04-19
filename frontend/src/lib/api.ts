@@ -8,7 +8,10 @@ import type {
   PipelineStartResponse,
 } from "./types";
 
-export const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+// Default to same-origin (empty string). When the FastAPI backend serves
+// the frontend, all requests are relative. Override only if frontend and
+// backend are on different origins (e.g. local dev with split servers).
+export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, options);

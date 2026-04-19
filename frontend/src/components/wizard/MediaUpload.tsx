@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, Dispatch, SetStateAction } from "react";
 import {
   uploadMedia,
   updateUploadStyle,
@@ -11,13 +11,14 @@ import type { Upload, StyleType } from "@/lib/types";
 
 interface Props {
   projectId: string;
+  uploads: Upload[];
+  setUploads: Dispatch<SetStateAction<Upload[]>>;
   onContinue: () => void;
 }
 
 const STYLES = ["original", "anime", "pixar"] as const;
 
-export default function MediaUpload({ projectId, onContinue }: Props) {
-  const [uploads, setUploads] = useState<Upload[]>([]);
+export default function MediaUpload({ projectId, uploads, setUploads, onContinue }: Props) {
   const [uploading, setUploading] = useState(false);
   const [globalStyle, setGlobalStyle] = useState<string>("original");
   const fileRef = useRef<HTMLInputElement>(null);

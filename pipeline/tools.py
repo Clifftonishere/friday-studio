@@ -197,32 +197,37 @@ def _fal_headers() -> dict[str, str]:
     }
 
 
-def _fal_queue_poll(model: str, request_id: str) -> FalQueueStatusResponse:
-    resp = requests.get(
-        f"{FAL_QUEUE_URL}/{model}/requests/{request_id}/status",
-        headers=_fal_headers(),
-        params={"logs": "1"},
-    )
+def _fal_queue_poll(status_url: str) -> FalQueueStatusResponse:
+    """Poll the status_url returned by a fal queue submit. Trusts fal's URL."""
+    resp = requests.get(status_url, headers=_fal_headers(), params={"logs": "1"})
     resp.raise_for_status()
     return resp.json()
 
 
-def _fal_queue_get_result(model: str, request_id: str) -> dict[str, Any]:
-    resp = requests.get(
-        f"{FAL_QUEUE_URL}/{model}/requests/{request_id}",
-        headers=_fal_headers(),
-    )
+def _fal_queue_get_result(response_url: str) -> dict[str, Any]:
+    """Fetch the completed result from the response_url returned by submit."""
+    resp = requests.get(response_url, headers=_fal_headers())
     resp.raise_for_status()
     return resp.json()
 
 
-def _fal_queue_wait(model: str, request_id: str, poll_interval: int, timeout: int, label: str) -> dict[str, Any]:
-    """Poll until COMPLETED, then return the result. Raises on FAILED or timeout."""
+def _fal_queue_wait(submit_response: dict[str, Any], poll_interval: int, timeout: int, label: str) -> dict[str, Any]:
+    """Poll a fal queue submission until COMPLETED, then return the result.
+
+    Uses the status_url and response_url returned by fal in the submit
+    response — the URL pattern varies across regions/models so constructing
+    them ourselves is fragile. Raises on FAILED or timeout.
+    """
+    status_url = submit_response.get("status_url")
+    response_url = submit_response.get("response_url")
+    if not status_url or not response_url:
+        raise RuntimeError(f"{label}: submit response missing status_url/response_url: {submit_response}")
+
     start = time.time()
     while time.time() - start < timeout:
-        status = _fal_queue_poll(model, request_id)
+        status = _fal_queue_poll(status_url)
         if status.get("status") == "COMPLETED":
-            return _fal_queue_get_result(model, request_id)
+            return _fal_queue_get_result(response_url)
         if status.get("status") == "FAILED":
             raise RuntimeError(f"{label} failed: {status}")
         time.sleep(poll_interval)
@@ -251,12 +256,13 @@ def kling_image_to_video(image_path: str, prompt: str, duration: int = 5, negati
     return _retry(_call)
 
 
-def kling_wait_for_video(request_id: str, poll_interval: int = 5, timeout: int = 900) -> dict[str, Any]:
-    """Poll until Kling video is ready. Timeout defaults to 15 min (typical: 5-14 min)."""
-    return _fal_queue_wait(
-        FAL_KLING_MODEL, request_id, poll_interval, timeout,
-        "Kling video generation",
-    )
+def kling_wait_for_video(submit_response: dict[str, Any], poll_interval: int = 5, timeout: int = 900) -> dict[str, Any]:
+    """Poll until Kling video is ready. Timeout defaults to 15 min (typical: 5-14 min).
+
+    Pass the full submit response from kling_image_to_video — we need its
+    status_url and response_url to poll the right endpoints.
+    """
+    return _fal_queue_wait(submit_response, poll_interval, timeout, "Kling video generation")
 
 
 # ---------------------------------------------------------------------------
@@ -284,8 +290,6 @@ def music_generate(prompt: str, instrumental: bool = True) -> FalQueueSubmitResp
     return _retry(_call)
 
 
-def music_wait_for_result(request_id: str, poll_interval: int = 5, timeout: int = 300) -> dict[str, Any]:
-    return _fal_queue_wait(
-        FAL_MINIMAX_MODEL, request_id, poll_interval, timeout,
-        "Music generation",
-    )
+def music_wait_for_result(submit_response: dict[str, Any], poll_interval: int = 5, timeout: int = 300) -> dict[str, Any]:
+    """Pass the full submit response from music_generate (need status_url/response_url)."""
+    return _fal_queue_wait(submit_response, poll_interval, timeout, "Music generation")

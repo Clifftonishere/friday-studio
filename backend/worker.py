@@ -275,17 +275,17 @@ def _stage_4_animation(project_id: str, stage_id: str) -> list[AssetDict]:
         description = meta.get("description", "")
 
         motion_prompt = f"Animate this scene. {description}. Smooth cinematic motion, maintain art style throughout."
-        result = kling_image_to_video(kf["file_path"], motion_prompt, duration=5)
+        submit = kling_image_to_video(kf["file_path"], motion_prompt, duration=5)
+        if not submit.get("request_id"):
+            raise RuntimeError(f"Kling submit returned no request_id: {submit}")
 
-        request_id = result.get("request_id")
-        if request_id:
-            video_result = kling_wait_for_video(request_id)
-            video_url = video_result.get("video", {}).get("url", "")
-            out_filename = f"clip_{scene_num:02d}_v1.mp4"
-            out_path = str(clip_dir / out_filename)
-            _download_file(video_url, out_path)
-        else:
-            out_path = None
+        video_result = kling_wait_for_video(submit)
+        video_url = video_result.get("video", {}).get("url", "")
+        if not video_url:
+            raise RuntimeError(f"Kling result missing video URL: {video_result}")
+        out_filename = f"clip_{scene_num:02d}_v1.mp4"
+        out_path = str(clip_dir / out_filename)
+        _download_file(video_url, out_path)
 
         asset = create_asset(
             project_id, stage_id, "clip",
@@ -338,15 +338,14 @@ def _stage_5_audio(project_id: str, stage_id: str) -> list[AssetDict]:
     crew = Crew(agents=[agent], tasks=[task], process=Process.sequential, verbose=True)
     music_prompt = str(crew.kickoff())
 
-    music_result = music_generate(music_prompt, instrumental=True)
+    submit = music_generate(music_prompt, instrumental=True)
 
     audio_dir = _project_subdir(project_id, "audio")
     out_path = str(audio_dir / "soundtrack_v1.mp3")
 
-    # fal.ai queue: if we got a request_id, poll for completion
-    request_id = music_result.get("request_id")
-    if request_id:
-        music_result = music_wait_for_result(request_id)
+    # fal queue submit returns request_id + status_url + response_url; pass
+    # the whole response so wait_for_result can use the URLs fal gave us.
+    music_result = music_wait_for_result(submit) if submit.get("request_id") else submit
 
     # Extract audio URL from result
     audio_url = None
